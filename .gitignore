@@ -1,0 +1,52 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environments
+.env
+.env.*
+.venv/
+venv/
+env/
+ENV/
+
+# Local configs and secrets
+configs/*.local.yaml
+configs/*.local.yml
+configs/*.secret.yaml
+configs/*.secret.yml
+configs/*.yaml
+configs/*.yml
+!configs/example.yaml
+!configs/*.example.yaml
+!configs/*.example.yml
+
+# Examples and demos
+examples/
+example_jsons/
+case1/
+
+# Generated outputs
+results/
+outputs/
+
+# Other
+scripts/
+test*
+__*

@@ -1,0 +1,82 @@
+agents:
+  - name: paper_parser
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+
+  - name: template_parser
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+
+  - name: commander
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+
+  - name: writer
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+    writer_config:
+      max_review_iterations: 2
+      enable_review: true
+      enable_tools: true
+      available_tools:
+        - validate_citations
+        - count_words
+        - check_key_points
+
+  - name: typesetter
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+
+  - name: metadata
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+    metadata_config:
+      enable_mini_review: true
+      max_review_iterations: 2
+
+  - name: reviewer
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+
+  - name: planner
+    model:
+      model_name: kimi-k2-turbo-preview
+      api_key: YOUR_API_KEY
+      base_url: https://api.moonshot.cn/v1
+
+  - name: vlm_review
+    model:
+      # Must be a vision-capable model
+      model_name: openai/gpt-4o
+      api_key: YOUR_OPENROUTER_KEY
+      base_url: https://openrouter.ai/api/v1
+    vlm_review_config:
+      enabled: true
+      provider: openai
+      # Optional: override model config
+      # vlm_model: google/gemini-2.0-flash-exp:free
+      # vlm_model: anthropic/claude-3.5-sonnet
+      # vlm_model: openai/gpt-4o
+      # vlm_api_key: YOUR_VLM_API_KEY
+      # vlm_base_url: https://openrouter.ai/api/v1
+      render_dpi: 150
+      max_pages_to_analyze: 12
+      check_overflow: true
+      check_underfill: true
+      check_layout: false
+      min_fill_percentage: 0.85
+      max_blank_area: 0.15
