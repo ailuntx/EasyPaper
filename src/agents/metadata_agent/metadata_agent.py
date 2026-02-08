@@ -56,6 +56,7 @@ from ..planner_agent.models import (
     calculate_total_words,
 )
 from ..shared.table_converter import convert_tables
+from ..reviewer_agent.models import ReviewResult, FeedbackResult, Severity, SectionFeedback
 from .models import FigureSpec, TableSpec
 
 
@@ -175,6 +176,8 @@ class MetaDataAgent(BaseAgent):
         sections_results = []
         generated_sections: Dict[str, str] = {}
         paper_plan: Optional[PaperPlan] = None
+        review_iterations = 0
+        target_word_count = None
         
         # Parse references first
         parsed_refs = self._parse_references(metadata.references)
@@ -415,95 +418,33 @@ class MetaDataAgent(BaseAgent):
                 errors.append(f"Conclusion generation failed: {conclusion_result.error}")
             
             # =================================================================
-            # Phase 3.5: Review Loop (if enabled)
+            # Unified Review Orchestration (Reviewer + VLM)
             # =================================================================
-            review_iterations = 0
-            target_word_count = None
-            
-            if enable_review:
-                print(f"[MetaDataAgent] Phase 3.5: Review Loop (max {max_review_iterations} iterations)...")
-                
-                # Calculate word counts for each section
-                word_counts = {}
-                for sr in sections_results:
-                    if sr.status == "ok":
-                        word_counts[sr.section_type] = sr.word_count
-                
-                for iteration in range(max_review_iterations):
-                    review_iterations = iteration + 1
-                    print(f"[MetaDataAgent] Review iteration {review_iterations}/{max_review_iterations}")
-                    
-                    # Call reviewer agent
-                    review_result, target_word_count = await self._call_reviewer(
-                        sections=generated_sections,
-                        word_counts=word_counts,
-                        target_pages=target_pages,
-                        style_guide=metadata.style_guide,
-                        template_path=template_path,
-                        iteration=iteration,
-                    )
-                    
-                    if review_result is None:
-                        print("[MetaDataAgent] Review skipped: reviewer not available")
-                        break
-                    
-                    if review_result.get("passed", True):
-                        print(f"[MetaDataAgent] Review passed at iteration {review_iterations}")
-                        break
-                    
-                    # Revise sections that need changes
-                    requires_revision = review_result.get("requires_revision", {})
-                    section_feedbacks = review_result.get("section_feedbacks", [])
-                    
-                    if not requires_revision:
-                        print("[MetaDataAgent] No revisions required")
-                        break
-                    
-                    print(f"[MetaDataAgent] Revising {len(requires_revision)} sections: {list(requires_revision.keys())}")
-                    
-                    for section_type in requires_revision.keys():
-                        if section_type not in generated_sections:
-                            continue
-                        
-                        # Find the revision prompt for this section
-                        revision_prompt = ""
-                        for sf in section_feedbacks:
-                            if sf.get("section_type") == section_type:
-                                revision_prompt = sf.get("revision_prompt", "")
-                                break
-                        
-                        if not revision_prompt:
-                            continue
-                        
-                        # Revise the section
-                        revised_content = await self._revise_section(
-                            section_type=section_type,
-                            current_content=generated_sections[section_type],
-                            revision_prompt=revision_prompt,
-                            metadata=metadata,
-                        )
-                        
-                        if revised_content:
-                            # Fix LaTeX syntax and validate citations in revised content
-                            revised_content = self._fix_latex_references(revised_content)
-                            revised_content, invalid_citations, valid_citations = self._validate_and_fix_citations(
-                                revised_content, valid_citation_keys, remove_invalid=True
-                            )
-                            if invalid_citations:
-                                print(f"[ReviewLoop] Removed {len(invalid_citations)} invalid citations from {section_type}: {invalid_citations[:3]}{'...' if len(invalid_citations) > 3 else ''}")
-                            
-                            generated_sections[section_type] = revised_content
-                            new_word_count = len(revised_content.split())
-                            word_counts[section_type] = new_word_count
-                            
-                            # Update sections_results
-                            for sr in sections_results:
-                                if sr.section_type == section_type:
-                                    sr.latex_content = revised_content
-                                    sr.word_count = new_word_count
-                                    break
-                            
-                            print(f"[MetaDataAgent] Revised {section_type}: {new_word_count} words")
+            (
+                generated_sections,
+                sections_results,
+                review_iterations,
+                target_word_count,
+                pdf_path,
+                orchestration_errors,
+            ) = await self._run_review_orchestration(
+                generated_sections=generated_sections,
+                sections_results=sections_results,
+                metadata=metadata,
+                parsed_refs=parsed_refs,
+                paper_plan=paper_plan,
+                template_path=template_path,
+                figures_source_dir=figures_source_dir,
+                converted_tables=converted_tables,
+                max_review_iterations=max_review_iterations,
+                enable_review=enable_review,
+                compile_pdf=compile_pdf,
+                enable_vlm_review=enable_vlm_review,
+                target_pages=target_pages,
+                paper_dir=paper_dir,
+            )
+            if orchestration_errors:
+                errors.extend(orchestration_errors)
             
             # =================================================================
             # Assemble Paper
@@ -541,59 +482,6 @@ class MetaDataAgent(BaseAgent):
                 )
                 
                 print(f"[MetaDataAgent] Output saved to: {output_path}")
-            
-            # =================================================================
-            # Phase 4: PDF Compilation (if template provided)
-            # =================================================================
-            pdf_path = None
-            if compile_pdf and template_path and paper_dir:
-                # Determine base_path for resolving relative figure paths
-                # Use current working directory as base (where CLI is run from)
-                figure_base_path = os.getcwd()
-                
-                # Collect figure paths from metadata
-                figure_paths = self._collect_figure_paths(metadata.figures, base_path=figure_base_path)
-                
-                pdf_result_path, latex_result_path = await self._compile_pdf(
-                    generated_sections=generated_sections,
-                    template_path=template_path,
-                    references=parsed_refs,
-                    output_dir=paper_dir,
-                    paper_title=metadata.title,
-                    figures_source_dir=figures_source_dir,
-                    figure_paths=figure_paths,
-                    converted_tables=converted_tables,
-                    paper_plan=paper_plan,
-                    figures=metadata.figures,
-                )
-                if pdf_result_path:
-                    pdf_path = pdf_result_path
-                    
-                    # =================================================================
-                    # Phase 5: VLM Review (if enabled)
-                    # =================================================================
-                    if enable_vlm_review:
-                        print(f"[MetaDataAgent] Phase 5: VLM Review...")
-                        vlm_result = await self._call_vlm_review(
-                            pdf_path=pdf_path,
-                            page_limit=target_pages or 8,
-                            template_type=metadata.style_guide or "ICML",
-                            sections_info={
-                                sr.section_type: {"word_count": sr.word_count}
-                                for sr in sections_results if sr.word_count
-                            },
-                        )
-                        if vlm_result:
-                            if vlm_result.get("passed"):
-                                print(f"[MetaDataAgent] VLM Review: PASSED")
-                            else:
-                                print(f"[MetaDataAgent] VLM Review: {vlm_result.get('summary', 'FAILED')}")
-                                if vlm_result.get("needs_trim"):
-                                    errors.append(f"Page overflow: {vlm_result.get('overflow_pages', 0)} extra pages")
-                else:
-                    errors.append("PDF compilation failed")
-            elif compile_pdf and not template_path:
-                print("[MetaDataAgent] Skipping PDF compilation: no template_path provided")
             
             # Determine overall status
             if not errors:
@@ -1733,6 +1621,478 @@ class MetaDataAgent(BaseAgent):
     # =========================================================================
     # Phase 3.5: Review Loop Methods
     # =========================================================================
+    
+    def _build_vlm_feedback(
+        self,
+        vlm_result: Dict[str, Any],
+    ) -> Tuple[List[FeedbackResult], List[SectionFeedback]]:
+        """
+        Build feedback and section revisions from VLM result.
+        - **Description**:
+            - Converts VLM review output into Reviewer-compatible feedback
+            - Maps overflow/underfill to FeedbackResult and section advice to SectionFeedback
+        
+        - **Args**:
+            - `vlm_result` (Dict[str, Any]): Raw VLM review result dict
+        
+        - **Returns**:
+            - `feedbacks` (List[FeedbackResult]): Aggregated feedback results
+            - `section_feedbacks` (List[SectionFeedback]): Per-section revision guidance
+        """
+        feedbacks: List[FeedbackResult] = []
+        section_feedbacks: List[SectionFeedback] = []
+        
+        if not vlm_result:
+            return feedbacks, section_feedbacks
+        
+        overflow_pages = vlm_result.get("overflow_pages", 0)
+        needs_trim = vlm_result.get("needs_trim", False)
+        needs_expand = vlm_result.get("needs_expand", False)
+        
+        if overflow_pages > 0 or needs_trim:
+            feedbacks.append(FeedbackResult(
+                checker_name="vlm_review",
+                passed=False,
+                severity=Severity.ERROR,
+                message=vlm_result.get("summary", "Page overflow detected"),
+                details={
+                    "overflow_pages": overflow_pages,
+                    "needs_trim": True,
+                    "source": "vlm_review",
+                },
+            ))
+        elif needs_expand:
+            feedbacks.append(FeedbackResult(
+                checker_name="vlm_review",
+                passed=False,
+                severity=Severity.WARNING,
+                message=vlm_result.get("summary", "Underfill detected"),
+                details={
+                    "needs_expand": True,
+                    "source": "vlm_review",
+                },
+            ))
+        else:
+            feedbacks.append(FeedbackResult(
+                checker_name="vlm_review",
+                passed=True,
+                severity=Severity.INFO,
+                message=vlm_result.get("summary", "VLM review passed"),
+                details={"source": "vlm_review"},
+            ))
+        
+        section_recommendations = vlm_result.get("section_recommendations", {}) or {}
+        for section_type, advice in section_recommendations.items():
+            recommended_action = getattr(advice, "recommended_action", None) or advice.get("recommended_action")
+            target_change = getattr(advice, "target_change", None) or advice.get("target_change")
+            guidance = getattr(advice, "specific_guidance", None) or advice.get("specific_guidance")
+            
+            if recommended_action == "trim":
+                action = "reduce"
+                delta_words = -abs(target_change) if target_change else 0
+            elif recommended_action == "expand":
+                action = "expand"
+                delta_words = abs(target_change) if target_change else 0
+            else:
+                action = "ok"
+                delta_words = 0
+            
+            revision_prompt = self._build_vlm_revision_prompt(
+                section_type=section_type,
+                action=action,
+                delta_words=delta_words,
+                guidance=guidance,
+            )
+            
+            section_feedbacks.append(SectionFeedback(
+                section_type=section_type,
+                current_word_count=0,
+                target_word_count=0,
+                action=action,
+                delta_words=delta_words,
+                revision_prompt=revision_prompt,
+            ))
+        
+        return feedbacks, section_feedbacks
+    
+    def _build_vlm_revision_prompt(
+        self,
+        section_type: str,
+        action: str,
+        delta_words: int,
+        guidance: Optional[str] = None,
+    ) -> str:
+        """
+        Build revision prompt from VLM guidance.
+        - **Description**:
+            - Produces a concise revision instruction for the writer agent
+            - Ensures prompt is compatible with _revise_section()
+        
+        - **Args**:
+            - `section_type` (str): Section name to revise
+            - `action` (str): "reduce" or "expand"
+            - `delta_words` (int): Target word change (+/-)
+            - `guidance` (Optional[str]): Extra VLM guidance
+        
+        - **Returns**:
+            - `prompt` (str): Revision instruction prompt
+        """
+        action_text = "reduce" if action == "reduce" else "expand"
+        delta = abs(delta_words) if delta_words else 0
+        guidance_text = f"Guidance: {guidance}" if guidance else ""
+        
+        return (
+            f"Revise the {section_type} section to {action_text} by approximately {delta} words. "
+            "Preserve factual consistency, citations, and LaTeX formatting. "
+            "Prioritize trimming low-impact details or expanding evidence/details. "
+            f"{guidance_text}"
+        ).strip()
+    
+    def _merge_section_feedbacks(
+        self,
+        base_feedbacks: List[SectionFeedback],
+        vlm_feedbacks: List[SectionFeedback],
+        prefer_vlm: bool,
+    ) -> List[SectionFeedback]:
+        """
+        Merge section feedbacks with conflict resolution.
+        - **Description**:
+            - Merges reviewer and VLM section feedback
+            - Resolves conflicts based on prefer_vlm flag
+        
+        - **Args**:
+            - `base_feedbacks` (List[SectionFeedback]): Reviewer-driven feedback
+            - `vlm_feedbacks` (List[SectionFeedback]): VLM-driven feedback
+            - `prefer_vlm` (bool): Whether to override conflicts with VLM advice
+        
+        - **Returns**:
+            - `merged` (List[SectionFeedback]): Merged section feedback list
+        """
+        merged: Dict[str, SectionFeedback] = {fb.section_type: fb for fb in base_feedbacks}
+        
+        for fb in vlm_feedbacks:
+            existing = merged.get(fb.section_type)
+            if not existing:
+                merged[fb.section_type] = fb
+                continue
+            
+            if existing.action != fb.action and prefer_vlm:
+                merged[fb.section_type] = fb
+            elif existing.action == fb.action and abs(fb.delta_words) > abs(existing.delta_words):
+                merged[fb.section_type] = fb
+        
+        return list(merged.values())
+    
+    def _resolve_section_feedbacks(
+        self,
+        section_feedbacks: List[SectionFeedback],
+        revised_sections: set,
+        review_result: ReviewResult,
+    ) -> None:
+        """
+        Mark section feedbacks as resolved after revision.
+        - **Description**:
+            - Clears revision prompts for sections already revised
+            - Updates review_result.requires_revision accordingly
+        
+        - **Args**:
+            - `section_feedbacks` (List[SectionFeedback]): Feedback list to update
+            - `revised_sections` (set): Sections that were revised
+            - `review_result` (ReviewResult): Review result to update
+        
+        - **Returns**:
+            - `None`
+        """
+        if not revised_sections:
+            return
+        
+        for sf in section_feedbacks:
+            if sf.section_type in revised_sections:
+                sf.action = "ok"
+                sf.delta_words = 0
+                sf.revision_prompt = ""
+        
+        for section_type in list(review_result.requires_revision.keys()):
+            if section_type in revised_sections:
+                review_result.requires_revision.pop(section_type, None)
+    
+    async def _apply_revisions(
+        self,
+        review_result: ReviewResult,
+        generated_sections: Dict[str, str],
+        sections_results: List[SectionResult],
+        valid_citation_keys: set,
+        metadata: PaperMetaData,
+    ) -> set:
+        """
+        Apply revisions based on a unified review result.
+        - **Description**:
+            - Uses review_result.section_feedbacks to revise sections
+            - Updates generated_sections and sections_results in place
+        
+        - **Args**:
+            - `review_result` (ReviewResult): Unified review result
+            - `generated_sections` (Dict[str, str]): Section contents
+            - `sections_results` (List[SectionResult]): Section results to update
+            - `valid_citation_keys` (set): Valid citation keys
+            - `metadata` (PaperMetaData): Original metadata for context
+        
+        - **Returns**:
+            - `revised_sections` (set): Section types that were revised
+        """
+        revised_sections: set = set()
+        if not review_result or not review_result.section_feedbacks:
+            return revised_sections
+        
+        for sf in review_result.section_feedbacks:
+            if sf.action == "ok":
+                continue
+            if sf.section_type not in generated_sections:
+                continue
+            
+            revision_prompt = sf.revision_prompt
+            if not revision_prompt:
+                continue
+            
+            revised_content = await self._revise_section(
+                section_type=sf.section_type,
+                current_content=generated_sections[sf.section_type],
+                revision_prompt=revision_prompt,
+                metadata=metadata,
+            )
+            
+            if revised_content:
+                revised_content = self._fix_latex_references(revised_content)
+                revised_content, invalid_citations, _ = self._validate_and_fix_citations(
+                    revised_content, valid_citation_keys, remove_invalid=True
+                )
+                if invalid_citations:
+                    print(f"[ReviewLoop] Removed {len(invalid_citations)} invalid citations from {sf.section_type}: {invalid_citations[:3]}{'...' if len(invalid_citations) > 3 else ''}")
+                
+                generated_sections[sf.section_type] = revised_content
+                new_word_count = len(revised_content.split())
+                
+                for sr in sections_results:
+                    if sr.section_type == sf.section_type:
+                        sr.latex_content = revised_content
+                        sr.word_count = new_word_count
+                        break
+                
+                revised_sections.add(sf.section_type)
+                print(f"[MetaDataAgent] Revised {sf.section_type}: {new_word_count} words")
+        
+        return revised_sections
+    
+    def _get_sections_fingerprint(self, sections: Dict[str, str]) -> str:
+        """
+        Build a stable fingerprint for section content.
+        - **Description**:
+            - Generates a hash string from section contents
+            - Used to detect no-op revisions
+        
+        - **Args**:
+            - `sections` (Dict[str, str]): Section contents
+        
+        - **Returns**:
+            - `fingerprint` (str): SHA-256 fingerprint
+        """
+        import hashlib
+        hasher = hashlib.sha256()
+        for section_type in sorted(sections.keys()):
+            hasher.update(section_type.encode("utf-8"))
+            hasher.update(b"\n")
+            hasher.update(sections[section_type].encode("utf-8"))
+            hasher.update(b"\n")
+        return hasher.hexdigest()
+    
+    async def _run_review_orchestration(
+        self,
+        generated_sections: Dict[str, str],
+        sections_results: List[SectionResult],
+        metadata: PaperMetaData,
+        parsed_refs: List[Dict[str, Any]],
+        paper_plan: Optional[PaperPlan],
+        template_path: Optional[str],
+        figures_source_dir: Optional[str],
+        converted_tables: Dict[str, str],
+        max_review_iterations: int,
+        enable_review: bool,
+        compile_pdf: bool,
+        enable_vlm_review: bool,
+        target_pages: Optional[int],
+        paper_dir: Optional[Path],
+    ) -> Tuple[Dict[str, str], List[SectionResult], int, Optional[int], Optional[str], List[str]]:
+        """
+        Run unified review orchestration across reviewer and VLM.
+        - **Description**:
+            - Executes reviewer checks and VLM review in a single loop
+            - Applies revisions, recompiles, and rechecks until pass or limit
+        
+        - **Args**:
+            - `generated_sections` (Dict[str, str]): Section contents
+            - `sections_results` (List[SectionResult]): Section result list
+            - `metadata` (PaperMetaData): Paper metadata
+            - `parsed_refs` (List[Dict[str, Any]]): Parsed references
+            - `paper_plan` (Optional[PaperPlan]): Paper plan with targets
+            - `template_path` (Optional[str]): Template path for PDF
+            - `figures_source_dir` (Optional[str]): Figure source directory
+            - `converted_tables` (Dict[str, str]): Converted table LaTeX
+            - `max_review_iterations` (int): Maximum review iterations
+            - `enable_review` (bool): Enable ReviewerAgent checks
+            - `compile_pdf` (bool): Compile PDF if template_path is provided
+            - `enable_vlm_review` (bool): Enable VLM-based PDF review
+            - `target_pages` (Optional[int]): Target page count
+            - `paper_dir` (Optional[Path]): Output directory
+        
+        - **Returns**:
+            - `generated_sections` (Dict[str, str]): Updated sections
+            - `sections_results` (List[SectionResult]): Updated results
+            - `review_iterations` (int): Iteration count used
+            - `target_word_count` (Optional[int]): Target word count from reviewer
+            - `pdf_path` (Optional[str]): Latest compiled PDF path
+            - `errors` (List[str]): Orchestration errors
+        """
+        errors: List[str] = []
+        review_iterations = 0
+        target_word_count = None
+        pdf_path = None
+        last_fingerprint = self._get_sections_fingerprint(generated_sections)
+        last_vlm_result = None
+        
+        if enable_review:
+            print(f"[MetaDataAgent] Unified Review Loop (max {max_review_iterations} iterations)...")
+        
+        for iteration in range(max_review_iterations):
+            review_iterations = iteration + 1
+            print(f"[MetaDataAgent] Review iteration {review_iterations}/{max_review_iterations}")
+            
+            word_counts = {
+                sr.section_type: sr.word_count
+                for sr in sections_results
+                if sr.status == "ok"
+            }
+            
+            review_result = ReviewResult(iteration=iteration)
+            if enable_review:
+                reviewer_result, target_word_count = await self._call_reviewer(
+                    sections=generated_sections,
+                    word_counts=word_counts,
+                    target_pages=target_pages,
+                    style_guide=metadata.style_guide,
+                    template_path=template_path,
+                    iteration=iteration,
+                )
+                if reviewer_result is None:
+                    print("[MetaDataAgent] Reviewer not available, skipping content review")
+                else:
+                    review_result = ReviewResult(**reviewer_result)
+            
+            reviewer_revised_sections = await self._apply_revisions(
+                review_result=review_result,
+                generated_sections=generated_sections,
+                sections_results=sections_results,
+                valid_citation_keys=self._extract_valid_citation_keys(parsed_refs),
+                metadata=metadata,
+            )
+            self._resolve_section_feedbacks(
+                section_feedbacks=review_result.section_feedbacks,
+                revised_sections=reviewer_revised_sections,
+                review_result=review_result,
+            )
+            word_counts = {
+                sr.section_type: sr.word_count
+                for sr in sections_results
+                if sr.status == "ok"
+            }
+            
+            # Compile PDF and run VLM review if enabled
+            if compile_pdf and template_path and paper_dir:
+                figure_base_path = os.getcwd()
+                figure_paths = self._collect_figure_paths(metadata.figures, base_path=figure_base_path)
+                pdf_result_path, _ = await self._compile_pdf(
+                    generated_sections=generated_sections,
+                    template_path=template_path,
+                    references=parsed_refs,
+                    output_dir=paper_dir,
+                    paper_title=metadata.title,
+                    figures_source_dir=figures_source_dir,
+                    figure_paths=figure_paths,
+                    converted_tables=converted_tables,
+                    paper_plan=paper_plan,
+                    figures=metadata.figures,
+                )
+                if pdf_result_path:
+                    pdf_path = pdf_result_path
+                else:
+                    errors.append("PDF compilation failed")
+                    break
+                
+                if enable_vlm_review and pdf_path:
+                    print(f"[MetaDataAgent] VLM Review...")
+                    last_vlm_result = await self._call_vlm_review(
+                        pdf_path=pdf_path,
+                        page_limit=target_pages or 8,
+                        template_type=metadata.style_guide or "ICML",
+                        sections_info={
+                            sr.section_type: {"word_count": sr.word_count}
+                            for sr in sections_results if sr.word_count
+                        },
+                    )
+                    if last_vlm_result:
+                        vlm_feedbacks, vlm_section_feedbacks = self._build_vlm_feedback(last_vlm_result)
+                        for fb in vlm_feedbacks:
+                            review_result.add_feedback(fb)
+                        
+                        prefer_vlm = bool(last_vlm_result.get("needs_trim") or last_vlm_result.get("needs_expand"))
+                        merged_section_feedbacks = self._merge_section_feedbacks(
+                            review_result.section_feedbacks,
+                            vlm_section_feedbacks,
+                            prefer_vlm=prefer_vlm,
+                        )
+                        review_result.section_feedbacks = merged_section_feedbacks
+                        for sf in review_result.section_feedbacks:
+                            if sf.section_type in word_counts:
+                                sf.current_word_count = word_counts.get(sf.section_type, 0)
+                            if paper_plan:
+                                section_plan = paper_plan.get_section(sf.section_type)
+                                if section_plan and section_plan.target_words:
+                                    sf.target_word_count = section_plan.target_words
+                        
+                        for sf in merged_section_feedbacks:
+                            if sf.action != "ok":
+                                review_result.add_section_revision(sf.section_type, "VLM adjustment")
+                    else:
+                        print("[MetaDataAgent] VLM review unavailable, skipping")
+            elif enable_vlm_review:
+                errors.append("VLM review skipped: PDF not compiled (missing template or output path)")
+            
+            vlm_revised_sections = await self._apply_revisions(
+                review_result=review_result,
+                generated_sections=generated_sections,
+                sections_results=sections_results,
+                valid_citation_keys=self._extract_valid_citation_keys(parsed_refs),
+                metadata=metadata,
+            )
+            self._resolve_section_feedbacks(
+                section_feedbacks=review_result.section_feedbacks,
+                revised_sections=vlm_revised_sections,
+                review_result=review_result,
+            )
+            
+            current_fingerprint = self._get_sections_fingerprint(generated_sections)
+            if current_fingerprint == last_fingerprint:
+                if review_result.passed and (not last_vlm_result or last_vlm_result.get("passed", True)):
+                    print("[MetaDataAgent] Review passed with no further changes")
+                else:
+                    if last_vlm_result and not last_vlm_result.get("passed", True):
+                        errors.append(last_vlm_result.get("summary", "VLM review failed"))
+                break
+            
+            last_fingerprint = current_fingerprint
+            if not reviewer_revised_sections and not vlm_revised_sections and review_result.passed and (not last_vlm_result or last_vlm_result.get("passed", True)):
+                break
+        
+        return generated_sections, sections_results, review_iterations, target_word_count, pdf_path, errors
     
     async def _call_reviewer(
         self,
