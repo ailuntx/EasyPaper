@@ -61,7 +61,7 @@ class SectionAdvice(BaseModel):
 class PageAnalysis(BaseModel):
     """Analysis result for a single page"""
     page_number: int
-    fill_percentage: float          # 0.0 - 1.0
+    fill_percentage: float          # 0-100
     is_overflow: bool = False       # Content extends beyond boundary
     has_significant_blank: bool = False
     blank_spaces: List[BlankSpace] = Field(default_factory=list)
@@ -69,6 +69,7 @@ class PageAnalysis(BaseModel):
     is_last_content_page: bool = False  # Last page with main content (before references)
     is_references_page: bool = False    # Contains bibliography
     is_appendix_page: bool = False      # Contains appendix content
+    body_content_percentage: float = 100.0  # 0-100, % of page that is main body content
     raw_vlm_response: Optional[str] = None  # Raw VLM response for debugging
 
 
@@ -120,8 +121,8 @@ class VLMReviewResult(BaseModel):
     """
     passed: bool
     total_pages: int
-    content_pages: int = 0
-    overflow_pages: int = 0
+    content_pages: float = 0.0
+    overflow_pages: float = 0.0
     underfill_detected: bool = False
     issues: List[LayoutIssue] = Field(default_factory=list)
     page_analyses: List[PageAnalysis] = Field(default_factory=list)
@@ -178,5 +179,6 @@ WORDS_PER_PAGE = {
     "EMNLP": 780,
     "CVPR": 900,
     "ICCV": 900,
+    "COLM": 800,
     "DEFAULT": 800,
 }

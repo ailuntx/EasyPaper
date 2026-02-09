@@ -1,0 +1,42 @@
+# ICML Venue Profile
+# Sources: AI-Research-SKILLs SKILL.md Conference Requirements
+
+name: icml
+description: >
+  Conference profile for ICML (International Conference on Machine Learning).
+  Enforces ICML-specific formatting, page limits, and style preferences.
+version: "1.0.0"
+tags:
+  - venue
+  - icml
+  - ml
+type: venue_profile
+target_sections:
+  - "*"
+priority: 15
+
+system_prompt_append: |
+  ## ICML-Specific Guidelines
+  - Page limit: 8 pages of content + unlimited references and appendix
+  - Abstract: max 250 words
+  - Style: clear, concise, algorithmically focused
+  - ICML prefers strong empirical validation with ablation studies
+  - Include position statement on societal impact if applicable
+  - Must use two-column format with the official ICML LaTeX template
+  - Prefer anonymized submissions
+
+venue_config:
+  page_limit: 8
+  abstract_limit: 250
+  words_per_page: 900
+  required_sections:
+    - "Introduction"
+    - "Related Work"
+    - "Method"
+    - "Experiments"
+    - "Conclusion"
+  optional_sections:
+    - "Impact Statement"
+  template: "icml2025"
+  anonymous: true
+  checklist: false

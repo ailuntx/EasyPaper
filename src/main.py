@@ -1,20 +1,41 @@
 # app/main.py
+from pathlib import Path
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import logging
 from .config import load_config
+from .config.schema import SkillsConfig
 from .agents import initialize_agents, register_agent_routers
+from .skills.loader import SkillLoader
+from .skills.registry import SkillRegistry
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     config = load_config()
     app.state.config = config
-    # Initialize agents
-    app.state.agents = initialize_agents(config.agents)
+
+    # --- Skills system initialization ---
+    skill_registry = SkillRegistry()
+    skills_config = config.skills or SkillsConfig()
+    if skills_config.enabled:
+        loader = SkillLoader()
+        skills = loader.load_directory(Path(skills_config.skills_dir))
+        for skill in skills:
+            skill_registry.register(skill)
+        print(f"   Skills system: {len(skill_registry)} skills loaded from {skills_config.skills_dir}")
+    app.state.skill_registry = skill_registry
+
+    # Initialize agents (pass skill_registry for ReviewerAgent / MetaDataAgent)
+    app.state.agents = initialize_agents(config.agents, skill_registry=skill_registry)
     # Register agent routers
     register_agent_routers(app, app.state.agents)
-    print(f"✅ Loaded config from env path with {len(app.state.agents)} agents.")
+
+    # Register skills API router
+    from .skills.router import create_skills_router
+    app.include_router(create_skills_router(skill_registry, config), tags=["skills"])
+
+    print(f"Loaded config from env path with {len(app.state.agents)} agents.")
     # Print model info for each agent (never print api keys)
     for agent_cfg in config.agents:
         model = agent_cfg.model

@@ -1,0 +1,91 @@
+# Academic Polish Writing Constraint
+# Enforces formal academic register, Gopen & Swan principles, and micro-level writing tips.
+# Sources: AI-Research-SKILLs writing-guide.md 7 Principles, awesome-ai-research-writing
+
+name: academic-polish
+description: >
+  Enforces formal academic writing register including no contractions,
+  no possessives on method names, Gopen & Swan subject-verb proximity,
+  and stress-position principles.
+version: "1.0.0"
+tags:
+  - writing
+  - academic
+  - polish
+  - style
+type: writing_constraint
+target_sections:
+  - "*"
+priority: 6
+
+system_prompt_append: |
+  ## Academic Polish Rules (MANDATORY)
+
+  ### Formal Register
+  - NO contractions: "it's" → "it is", "don't" → "do not", "can't" → "cannot",
+    "won't" → "will not", "we've" → "we have", "hasn't" → "has not",
+    "wouldn't" → "would not", "shouldn't" → "should not"
+  - NO possessives on method/model names: "BERT's performance" →
+    "the performance of BERT"
+  - Do NOT spell out well-known abbreviations after first use. Write "LLM"
+    not "Large Language Model (LLM)" after the first introduction.
+  - Avoid starting sentences with "There is/are" — restructure to lead with
+    the true subject.
+  - Avoid "very", "really", "quite", "rather" as intensifiers — use precise
+    quantifiers or remove them.
+
+  ### Gopen & Swan Principles
+  1. **Subject-Verb Proximity**: Keep the grammatical subject and main verb
+     close together. Avoid inserting long parenthetical clauses between them.
+     BAD: "The model, which was trained on 1M samples with a learning rate
+     of 1e-4 for 100 epochs, achieves 92% accuracy."
+     GOOD: "The model achieves 92% accuracy after training on 1M samples
+     with a learning rate of 1e-4 for 100 epochs."
+
+  2. **Stress Position**: Place the most important information at the END
+     of each sentence (the stress position).
+     BAD: "92% accuracy was achieved by our model on the benchmark."
+     GOOD: "On the benchmark, our model achieves 92% accuracy."
+
+  3. **Topic Position**: Begin each sentence with familiar/old information
+     (topic position) and end with new information.
+
+  4. **One Point Per Paragraph**: Each paragraph should make exactly one
+     main claim, stated in the first or second sentence.
+
+  5. **Transition Signaling**: Use logical connectors to show relationships
+     between ideas (however, therefore, in contrast, specifically).
+
+  6. **Consistent Terminology**: Use the same term for the same concept
+     throughout the paper. Do NOT alternate between synonyms for key terms.
+
+  7. **Sentence Length Variety**: Mix short declarative sentences with
+     longer complex ones. Avoid sequences of 3+ sentences all >30 words.
+
+  ### Numbers and Units
+  - Spell out numbers below 10 in running text: "three models", "five datasets"
+  - Use numerals for 10 and above, or when used with units: "12 layers", "3.5M parameters"
+  - Use ~ between number and unit in LaTeX: "3.5~GB"
+
+revision_guidance: |
+  When revising for academic polish:
+  1. Find and replace all contractions with full forms
+  2. Restructure sentences where subject and verb are separated by >8 words
+  3. Move the key finding/number to the end of each results sentence
+  4. Check that each paragraph has a clear topic sentence
+  5. Ensure consistent terminology — grep for synonym pairs
+
+anti_patterns:
+  - "it's"
+  - "don't"
+  - "can't"
+  - "won't"
+  - "we've"
+  - "hasn't"
+  - "wouldn't"
+  - "shouldn't"
+  - "There are"
+  - "There is"
+  - "very important"
+  - "really important"
+  - "quite significant"

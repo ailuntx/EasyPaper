@@ -1,0 +1,104 @@
+# Anti-AI-Style Writing Constraint
+# Eliminates common LLM-generated phrasing and promotes natural academic prose.
+# Sources: awesome-ai-research-writing, AI-Research-SKILLs writing-guide.md
+
+name: anti-ai-style
+description: >
+  Detects and removes AI-flavored language patterns (e.g. "delve into",
+  "leverage", "tapestry"). Enforces natural academic prose following
+  Lipton rules and Perez micro-tips.
+version: "1.0.0"
+tags:
+  - writing
+  - style
+  - anti-ai
+type: writing_constraint
+target_sections:
+  - "*"
+priority: 5
+
+system_prompt_append: |
+  ## Anti-AI Style Rules (CRITICAL)
+  You MUST avoid all of the following AI-flavored words and phrases. Using any
+  of them is considered a writing defect:
+  - "delve into", "delve", "delves"
+  - "leverage", "leveraging", "leveraged"
+  - "tapestry", "rich tapestry"
+  - "it is worth noting that", "it is important to note that"
+  - "First and foremost"
+  - "in the rapidly evolving landscape"
+  - "a testament to", "stands as a testament"
+  - "in this dynamic landscape"
+  - "multifaceted", "underscores", "underscoring"
+  - "spearhead", "spearheading"
+  - "at the forefront of"
+  - "game-changer", "game changing"
+  - "revolutionize", "revolutionizing"
+  - "groundbreaking"
+  - "paradigm shift"
+  - "holistic approach"
+  - "synergy", "synergies"
+  - "in today's world"
+  - "in conclusion" (at paragraph start)
+  - "overall" (as sentence opener)
+  - "plays a crucial role"
+  - "are poised to"
+  - "it's important to note"
+  - "in the realm of"
+  - "a myriad of"
+  - "in a nutshell"
+  - "it's worth mentioning"
+  - "navigating the landscape"
+
+  Instead use plain, direct academic language. Prefer concrete verbs:
+  - "leverage" → "use", "employ", "apply"
+  - "delve into" → "examine", "investigate", "study"
+  - "utilize" → "use"
+  - "facilitate" → "enable", "allow"
+  - "endeavor" → "attempt", "try"
+  - "elucidate" → "explain", "clarify"
+  - "aforementioned" → restate the noun
+
+  Additional style constraints:
+  - Do NOT use more than one em-dash (—) per paragraph
+  - Do NOT use three-part parallel structure ("First, X. Second, Y. Third, Z.")
+    more than once per section
+  - Do NOT stack connective adverbs ("Furthermore, ... Moreover, ... Additionally, ...")
+    in consecutive sentences
+
+revision_guidance: |
+  When revising to fix AI-style issues:
+  1. Replace each flagged word with a concrete, specific alternative
+  2. Break up stacked connective adverbs by restructuring sentences
+  3. Remove unnecessary hedging phrases ("It is worth noting that X" → "X")
+  4. Prefer active voice with a concrete subject
+
+anti_patterns:
+  - "delve"
+  - "leverage"
+  - "tapestry"
+  - "First and foremost"
+  - "it is worth noting"
+  - "rapidly evolving landscape"
+  - "a testament to"
+  - "multifaceted"
+  - "underscores"
+  - "spearhead"
+  - "at the forefront"
+  - "game-changer"
+  - "revolutionize"
+  - "groundbreaking"
+  - "paradigm shift"
+  - "holistic approach"
+  - "synergy"
+  - "plays a crucial role"
+  - "are poised to"
+  - "in the realm of"
+  - "a myriad of"
+  - "utilize"
+  - "facilitate"
+  - "endeavor"
+  - "elucidate"
+  - "aforementioned"
+  - "in a nutshell"
+  - "navigating the landscape"

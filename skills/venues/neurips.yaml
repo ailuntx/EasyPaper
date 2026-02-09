@@ -1,0 +1,49 @@
+# NeurIPS Venue Profile
+# Sources: AI-Research-SKILLs SKILL.md Conference Requirements + checklists.md
+
+name: neurips
+description: >
+  Conference profile for NeurIPS (Neural Information Processing Systems).
+  Enforces NeurIPS-specific formatting, page limits, and style preferences.
+version: "1.0.0"
+tags:
+  - venue
+  - neurips
+  - ml
+type: venue_profile
+target_sections:
+  - "*"
+priority: 15
+
+system_prompt_append: |
+  ## NeurIPS-Specific Guidelines
+  - Page limit: 9 pages of content + unlimited references and appendix
+  - Abstract: max 250 words
+  - Style: concise, mathematically rigorous, clear notation
+  - NeurIPS values novelty and theoretical depth — emphasize the key insight concisely
+  - Include a "Broader Impact" or "Societal Impact" statement
+  - Must address the NeurIPS Paper Checklist:
+    - Claims are well-supported by evidence
+    - Limitations are acknowledged
+    - Reproducibility details are sufficient
+    - Ethical considerations are addressed
+  - Prefer anonymized submissions: do NOT reveal author identity
+  - Use the official NeurIPS LaTeX template
+
+venue_config:
+  page_limit: 9
+  abstract_limit: 250
+  words_per_page: 800
+  required_sections:
+    - "Introduction"
+    - "Related Work"
+    - "Method"
+    - "Experiments"
+    - "Conclusion"
+  optional_sections:
+    - "Broader Impact"
+    - "Limitations"
+    - "Ethics Statement"
+  template: "neurips_2025"
+  anonymous: true
+  checklist: true

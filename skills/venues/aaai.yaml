@@ -1,0 +1,45 @@
+# AAAI Venue Profile
+# Sources: AI-Research-SKILLs SKILL.md Conference Requirements
+
+name: aaai
+description: >
+  Conference profile for AAAI (Association for the Advancement of
+  Artificial Intelligence). Enforces AAAI-specific formatting rules.
+version: "1.0.0"
+tags:
+  - venue
+  - aaai
+  - ai
+type: venue_profile
+target_sections:
+  - "*"
+priority: 15
+
+system_prompt_append: |
+  ## AAAI-Specific Guidelines
+  - Page limit: 7 pages of content + 1 page for references + optional appendix
+  - Abstract: max 150 words (AAAI has a shorter abstract limit)
+  - AAAI enforces strict formatting — violations lead to desk rejection
+  - Two-column format with specific margin requirements
+  - Figures and tables must fit within column width or use \textwidth for spanning
+  - Must use the official AAAI LaTeX template and press format
+  - References must be complete with all fields (authors, title, venue, year, pages)
+  - NO supplementary materials allowed in some tracks — check track guidelines
+  - Prefer anonymized submissions
+
+venue_config:
+  page_limit: 7
+  abstract_limit: 150
+  words_per_page: 900
+  required_sections:
+    - "Introduction"
+    - "Related Work"
+    - "Method"
+    - "Experiments"
+    - "Conclusion"
+  optional_sections:
+    - "Ethical Statement"
+  template: "aaai2025"
+  anonymous: true
+  checklist: false
+  strict_formatting: true

@@ -1,0 +1,70 @@
+# LaTeX Conventions Writing Constraint
+# Enforces correct LaTeX formatting, special character handling, and table/figure best practices.
+# Sources: awesome-ai-research-writing, AI-Research-SKILLs SKILL.md (L870-899)
+
+name: latex-conventions
+description: >
+  Enforces LaTeX best practices including special character escaping, tense
+  consistency, booktabs table formatting, and vector graphics usage.
+version: "1.0.0"
+tags:
+  - writing
+  - latex
+  - formatting
+type: writing_constraint
+target_sections:
+  - "*"
+priority: 8
+
+system_prompt_append: |
+  ## LaTeX Conventions (MANDATORY)
+
+  ### Special Characters
+  - Always escape: % → \%, & → \&, # → \#, $ → \$, _ → \_
+  - Use ``...'' for double quotes (NOT "...")
+  - Use `...` for single quotes (NOT '...')
+  - Use \textasciitilde{} for ~ in text mode
+  - Use --- for em-dash, -- for en-dash (page ranges: pp.~1--10)
+  - Use ~ for non-breaking spaces before references: Figure~\ref{fig:X}
+
+  ### Citations
+  - Always use ~ before \cite: results~\cite{smith2024}
+  - Use \citet{} for textual citations: "Smith et al.~\citet{smith2024} showed..."
+  - Use \citep{} for parenthetical citations: "...as shown in prior work~\citep{smith2024}"
+  - Never start a sentence with \citep{}; use \citet{} instead
+
+  ### Tables
+  - Use booktabs package (\toprule, \midrule, \bottomrule) — NO \hline
+  - Avoid vertical rules (|) in tables
+  - Right-align numeric columns, left-align text columns
+  - Bold the best result in comparison tables: \textbf{92.3}
+  - Place caption ABOVE the table (\caption{...} before \begin{tabular})
+
+  ### Figures
+  - Prefer vector formats (PDF) over raster (PNG/JPG) for plots
+  - Use colorblind-friendly palettes (avoid red-green only)
+  - Place caption BELOW the figure
+  - Use \includegraphics[width=\columnwidth]{...} for single-column figures
+  - All figures and tables must be referenced in the text before they appear
+
+  ### Cross-References
+  - Capitalize when using with \ref: "Figure~\ref{fig:X}", "Table~\ref{tab:Y}",
+    "Section~\ref{sec:Z}", "Equation~\eqref{eq:W}"
+  - Use \label{} immediately after \caption{} or \section{}
+
+  ### Tense
+  - Present tense for general statements and describing your method
+  - Past tense for describing specific experiments you conducted
+  - Present tense for conclusions and implications
+
+revision_guidance: |
+  When fixing LaTeX issues:
+  1. Check all special characters are properly escaped
+  2. Ensure all \cite references have ~ before them
+  3. Replace \hline with booktabs commands in tables
+  4. Verify figure/table captions are in correct position
+
+anti_patterns:
+  - "\\hline"
+  - "\"...\"" 
+  - "\\cite{"

@@ -1,0 +1,46 @@
+# COLM Venue Profile
+# Sources: AI-Research-SKILLs SKILL.md Conference Requirements
+
+name: colm
+description: >
+  Conference profile for COLM (Conference on Language Modeling).
+  A newer venue focused on language model research.
+version: "1.0.0"
+tags:
+  - venue
+  - colm
+  - language-modeling
+  - nlp
+type: venue_profile
+target_sections:
+  - "*"
+priority: 15
+
+system_prompt_append: |
+  ## COLM-Specific Guidelines
+  - Page limit: 9 pages of content + unlimited references and appendix
+  - Abstract: max 250 words
+  - COLM is focused specifically on language modeling — frame contributions
+    in terms of advances to language model understanding or capabilities
+  - Uses OpenReview for peer review
+  - Emphasize scalability, efficiency, and practical implications
+  - Include detailed experimental setup for reproducibility
+  - Must use official COLM LaTeX template
+  - Prefer anonymized submissions
+
+venue_config:
+  page_limit: 9
+  abstract_limit: 250
+  words_per_page: 800
+  required_sections:
+    - "Introduction"
+    - "Related Work"
+    - "Method"
+    - "Experiments"
+    - "Conclusion"
+  optional_sections:
+    - "Broader Impact"
+    - "Limitations"
+  template: "colm2025"
+  anonymous: true
+  checklist: false

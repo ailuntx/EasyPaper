@@ -5,8 +5,39 @@ Prompt Compiler - Shared prompt generation utilities
     - Provides section-specific prompt templates
     - Used by both Commander Agent and MetaData Agent
 """
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 import json
+
+if TYPE_CHECKING:
+    from ...skills.models import WritingSkill
+
+
+def _inject_skill_constraints(
+    prompt_parts: list,
+    active_skills: Optional[List["WritingSkill"]],
+    section_type: str,
+) -> None:
+    """
+    Inject writing-style constraints from active skills into prompt_parts (in-place).
+
+    - **Args**:
+        - `prompt_parts` (list): Mutable list of prompt segments to append to
+        - `active_skills` (List[WritingSkill] | None): Skills loaded from the registry
+        - `section_type` (str): Current section being written (used for matching)
+    """
+    if not active_skills:
+        return
+    matched = [
+        s for s in active_skills
+        if "*" in s.target_sections or section_type in s.target_sections
+    ]
+    matched.sort(key=lambda s: s.priority)
+    if matched:
+        constraints = "\n\n".join(
+            s.system_prompt_append for s in matched if s.system_prompt_append
+        )
+        if constraints:
+            prompt_parts.append(f"\n## Writing Style Constraints\n{constraints}")
 
 # Import models (will be available after section_models.py is updated)
 # Using forward references to avoid circular imports
@@ -92,6 +123,7 @@ def compile_section_prompt(
     word_limit: Optional[int] = None,
     style_guide: Optional[str] = None,
     intro_context: Optional[str] = None,
+    active_skills: Optional[List["WritingSkill"]] = None,
 ) -> str:
     """
     Compile a prompt for section generation
@@ -201,6 +233,9 @@ def compile_section_prompt(
     if constraints:
         prompt_parts.append(f"\n## Constraints\n" + "\n".join(constraints))
     
+    # Inject skill constraints before output instructions
+    _inject_skill_constraints(prompt_parts, active_skills, section_type)
+
     # Add output instructions
     prompt_parts.append("""
 ## Output Instructions
@@ -226,6 +261,7 @@ def compile_introduction_prompt(
     section_plan: Any = None,  # SectionPlan from planner
     figures: List[Any] = None,  # FigureSpec list
     tables: List[Any] = None,   # TableSpec list
+    active_skills: Optional[List["WritingSkill"]] = None,
 ) -> str:
     """
     Compile prompt for Introduction generation (Phase 1 - Leader section)
@@ -331,6 +367,13 @@ The Introduction is the LEADER section that:
     if style_guide:
         prompt += f"\n\n## Target Venue: {style_guide}"
     
+    # Inject skill constraints
+    if active_skills:
+        intro_parts: list = []
+        _inject_skill_constraints(intro_parts, active_skills, "introduction")
+        if intro_parts:
+            prompt += "\n" + "\n".join(intro_parts)
+    
     prompt += """
 
 ## Output Requirements
@@ -369,6 +412,7 @@ def compile_body_section_prompt(
     figures: List[Any] = None,  # FigureSpec list
     tables: List[Any] = None,   # TableSpec list
     converted_tables: Optional[Dict[str, str]] = None,  # table_id -> LaTeX code
+    active_skills: Optional[List["WritingSkill"]] = None,
 ) -> str:
     """
     Compile prompt for Body section generation (Phase 2)
@@ -571,6 +615,13 @@ def compile_body_section_prompt(
     if style_guide:
         prompt += f"\n\n## Target Venue: {style_guide}"
     
+    # Inject skill constraints
+    if active_skills:
+        body_parts: list = []
+        _inject_skill_constraints(body_parts, active_skills, section_type)
+        if body_parts:
+            prompt += "\n" + "\n".join(body_parts)
+    
     prompt += """
 
 ## Output Requirements
@@ -594,6 +645,7 @@ def compile_synthesis_prompt(
     word_limit: Optional[int] = None,
     style_guide: Optional[str] = None,
     section_plan: Any = None,  # SectionPlan from planner
+    active_skills: Optional[List["WritingSkill"]] = None,
 ) -> str:
     """
     Compile prompt for Synthesis sections (Abstract/Conclusion - Phase 3)
@@ -715,6 +767,13 @@ Write a conclusion that synthesizes the paper's contributions and findings.
 Key contributions: {key_contributions}
 """
     
+    # Inject skill constraints
+    if active_skills:
+        synth_parts: list = []
+        _inject_skill_constraints(synth_parts, active_skills, section_type)
+        if synth_parts:
+            prompt += "\n" + "\n".join(synth_parts)
+
     # Add constraints with strong emphasis on word limit
     if word_limit:
         prompt += f"\n\n## STRICT LENGTH CONSTRAINT\n"

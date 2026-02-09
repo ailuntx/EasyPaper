@@ -47,6 +47,12 @@ Identify:
 3. **Blank Spaces**: List any significant empty areas (location and size)
 4. **Layout Issues**: Identify widows (single line at top), orphans (single line at bottom), 
    badly placed figures/tables, or equations that overflow margins
+5. **Page Type**: Determine if this page contains bibliography/references or appendix content
+6. **Body Content Ratio**: Estimate what percentage (0-100) of this page is MAIN BODY content
+   (title, abstract, introduction, methods, experiments, results, discussion, conclusion).
+   Exclude any references/bibliography section and appendix content from this percentage.
+   For example, if the top 70% of the page is the end of a section and the bottom 30% is
+   the start of "References", body_content_percentage should be 70.
 
 Return ONLY this JSON structure:
 {
@@ -55,20 +61,31 @@ Return ONLY this JSON structure:
     "blank_spaces": [{"location": "<top/bottom/left/right/center>", "size": "<small/medium/large>"}],
     "layout_issues": [{"type": "<widow/orphan/bad_figure/equation_overflow>", "description": "<details>", "severity": "<low/medium/high>"}],
     "is_references_page": <true if this page contains bibliography/references>,
-    "is_appendix_page": <true if this page is part of an appendix section (look for "Appendix" heading or "A.", "B." style section numbering)>
+    "is_appendix_page": <true if this page is part of an appendix section (look for "Appendix" heading or "A.", "B." style section numbering)>,
+    "body_content_percentage": <0-100, percentage of page area occupied by main body content (not references, not appendix)>
 }"""
 
 LAST_PAGE_PROMPT = """Analyze this LAST page of an academic paper. Respond with JSON only.
 
-Determine:
-1. How much of the page is filled with content (percentage)?
-2. Is this the references/bibliography page, or does it have main content?
-3. How many more lines of text could fit in the empty space?
+Identify:
+1. **Page Fill**: Estimate what percentage (0-100) of the page has content vs blank space
+2. **Content Boundary**: Does any text or figure extend beyond the normal margins?
+3. **Blank Spaces**: List any significant empty areas (location and size)
+4. **Layout Issues**: Identify widows, orphans, badly placed figures/tables, or equation overflows
+5. **Page Type**: Is this a references/bibliography page, appendix page, or main body content page?
+6. **Body Content Ratio**: What percentage (0-100) of this page is MAIN BODY content?
+   Exclude references/bibliography and appendix from this count.
+7. **Empty Space**: How many more lines of text could fit in the empty space?
 
 Return ONLY this JSON:
 {
     "fill_percentage": <0-100>,
-    "is_references_page": <true/false>,
+    "is_overflow": <true if content beyond margins>,
+    "blank_spaces": [{"location": "<top/bottom/left/right/center>", "size": "<small/medium/large>"}],
+    "layout_issues": [{"type": "<widow/orphan/bad_figure/equation_overflow>", "description": "<details>", "severity": "<low/medium/high>"}],
+    "is_references_page": <true if this page contains bibliography/references>,
+    "is_appendix_page": <true if this page is part of an appendix section>,
+    "body_content_percentage": <0-100, percentage of page area occupied by main body content>,
     "estimated_empty_lines": <number>,
     "recommendation": "<can_add_content/well_filled/too_empty>"
 }"""
@@ -251,27 +268,32 @@ class VLMReviewAgent(BaseAgent):
             logger.error(f"Failed to count pages: {e}")
             return {"total_pages": 0, "error": str(e)}
     
+    # References and appendix have NO page limit, so the quick check must
+    # be generous.  A typical paper may have 2-5 pages of references alone.
+    _QUICK_CHECK_BUFFER = 5
+
     async def _check_overflow_quick(self, state: VLMReviewState) -> Dict[str, Any]:
         """
         Quick check for page overflow using page count.
         - **Description**:
-            - Page limits apply to the MAIN BODY only (excluding references
-              and appendix).  Since this quick check has no VLM info to
-              distinguish page types, we add a buffer of 2 pages to allow
-              for references (~1 page) and appendix (~1 page).
+            - Page limits apply to the MAIN BODY only; references and appendix
+              are unlimited.  Since this quick check has no VLM data to
+              distinguish page types, we add a generous buffer to avoid
+              false positives that waste VLM API calls.
             - The precise check happens later in _generate_result() after
               VLM classifies each page.
         """
         total_pages = state["total_pages"]
         page_limit = state["request"].page_limit
+        buffer = self._QUICK_CHECK_BUFFER
         
         # Allow extra pages for references + appendix (no VLM data yet)
-        quick_limit = page_limit + 2
+        quick_limit = page_limit + buffer
         is_overflow = total_pages > quick_limit
         overflow_pages = max(0, total_pages - quick_limit)
         
         if is_overflow:
-            print(f"[VLMReview] QUICK OVERFLOW: {total_pages} pages > limit {page_limit}+2 buffer")
+            print(f"[VLMReview] QUICK OVERFLOW: {total_pages} pages > limit {page_limit}+{buffer} buffer")
             issue = LayoutIssue(
                 issue_type=IssueType.OVERFLOW,
                 severity=IssueSeverity.CRITICAL,
@@ -283,7 +305,7 @@ class VLMReviewAgent(BaseAgent):
                 "issues": [issue],
             }
         else:
-            print(f"[VLMReview] Quick page count OK: {total_pages} <= {page_limit}+2 buffer")
+            print(f"[VLMReview] Quick page count OK: {total_pages} <= {page_limit}+{buffer} buffer")
             return {"overflow_detected": False}
     
     def _should_analyze_with_vlm(self, state: VLMReviewState) -> str:
@@ -307,8 +329,8 @@ class VLMReviewAgent(BaseAgent):
         total_pages = state["total_pages"]
         
         try:
-            # Render pages (limit to prevent excessive API calls)
-            max_pages = min(total_pages, 12)  # Max 12 pages
+            # Render ALL pages for accurate content/references/appendix classification
+            max_pages = total_pages
             
             print(f"[VLMReview] Rendering {max_pages} pages...")
             images = self.pdf_renderer.render_pages(
@@ -361,8 +383,8 @@ class VLMReviewAgent(BaseAgent):
                     # Collect issues
                     issues.extend(analysis.layout_issues)
                     
-                    # Check for underfill on last page (only if it's body content)
-                    if is_last and not analysis.is_references_page and not analysis.is_appendix_page:
+                    # Check for underfill on last page (only if it has meaningful body content)
+                    if is_last and analysis.body_content_percentage > 20:
                         if analysis.fill_percentage < request.min_fill_percentage * 100:
                             underfill_detected = True
                             issues.append(LayoutIssue(
@@ -406,19 +428,23 @@ class VLMReviewAgent(BaseAgent):
         overflow_detected_quick = state.get("overflow_detected", False)
         underfill_detected = state.get("underfill_detected", False)
         
-        # Estimate content pages (exclude references AND appendix)
-        content_pages = total_pages
+        # Estimate content pages using weighted body_content_percentage
+        # This handles mixed pages (e.g., 70% body + 30% references) accurately
+        content_pages = 0.0
         for analysis in page_analyses:
-            if analysis.is_references_page or analysis.is_appendix_page:
-                content_pages -= 1
+            content_pages += analysis.body_content_percentage / 100.0
+        # For any unanalyzed pages (shouldn't happen now), count as full content
+        content_pages += max(0, total_pages - len(page_analyses))
+        # Round to 1 decimal for readable output
+        content_pages = round(content_pages, 1)
 
         # Precise overflow based on content pages (body only)
-        overflow_pages = max(0, content_pages - request.page_limit)
+        overflow_pages = round(max(0, content_pages - request.page_limit), 1)
         overflow_detected = content_pages > request.page_limit
 
         print(
             f"[VLMReview] Page breakdown: total={total_pages} "
-            f"content(body)={content_pages} refs+appendix={total_pages - content_pages} "
+            f"content(body)={content_pages} non-body={round(total_pages - content_pages, 1)} "
             f"limit={request.page_limit} overflow={overflow_pages}"
         )
 
@@ -432,8 +458,9 @@ class VLMReviewAgent(BaseAgent):
                 issue_type=IssueType.OVERFLOW,
                 severity=IssueSeverity.CRITICAL,
                 description=(
-                    f"Body has {content_pages} pages, exceeds limit of "
-                    f"{request.page_limit} (total PDF: {total_pages} pages)"
+                    f"Body content is ~{content_pages} pages, exceeds limit of "
+                    f"{request.page_limit} (total PDF: {total_pages} pages, "
+                    f"overflow ~{overflow_pages} pages)"
                 ),
                 page_number=request.page_limit + 1,
             ))
@@ -449,18 +476,18 @@ class VLMReviewAgent(BaseAgent):
         
         # Calculate trim/expand targets
         words_per_page = WORDS_PER_PAGE.get(request.template_type, 800)
-        trim_target = overflow_pages * words_per_page if overflow_detected else 0
+        trim_target = int(overflow_pages * words_per_page) if overflow_detected else 0
         expand_target = 0
         if underfill_detected and page_analyses:
-            # Find last content page for underfill calculation
+            # Find last page with meaningful body content for underfill calculation
             last_content = None
             for a in reversed(page_analyses):
-                if not a.is_references_page and not a.is_appendix_page:
+                if a.body_content_percentage > 20:
                     last_content = a
                     break
             if last_content:
                 last_fill = last_content.fill_percentage / 100
-                expand_target = int((1 - last_fill) * words_per_page * 0.8)
+                expand_target = int((1 - last_fill) * words_per_page * 0.9)
         
         # Determine if passed
         has_critical = any(i.severity == IssueSeverity.CRITICAL for i in issues)
@@ -561,6 +588,17 @@ class VLMReviewAgent(BaseAgent):
         if is_appendix is None:
             is_appendix = False
 
+        # Parse body_content_percentage (0-100)
+        body_pct = data.get("body_content_percentage")
+        if body_pct is None:
+            # Infer from page type if VLM didn't return it
+            if is_refs_page and not is_appendix:
+                body_pct = 0.0
+            elif is_appendix and not is_refs_page:
+                body_pct = 0.0
+            else:
+                body_pct = 100.0
+
         return PageAnalysis(
             page_number=page_number,
             fill_percentage=float(fill_pct),
@@ -571,6 +609,7 @@ class VLMReviewAgent(BaseAgent):
             is_last_content_page=is_last and not is_refs_page and not is_appendix,
             is_references_page=bool(is_refs_page),
             is_appendix_page=bool(is_appendix),
+            body_content_percentage=float(body_pct),
             raw_vlm_response=raw_response,
         )
     
@@ -579,7 +618,7 @@ class VLMReviewAgent(BaseAgent):
         request: VLMReviewRequest,
         overflow_detected: bool,
         underfill_detected: bool,
-        overflow_pages: int,
+        overflow_pages: float,
         page_analyses: List[PageAnalysis],
     ) -> Dict[str, SectionAdvice]:
         """Generate section-level advice based on analysis"""
@@ -592,31 +631,61 @@ class VLMReviewAgent(BaseAgent):
         words_per_page = WORDS_PER_PAGE.get(request.template_type, 800)
         
         if overflow_detected:
-            # Need to trim
-            target_reduction = overflow_pages * words_per_page
+            # Need to trim — use multi-pass allocation to ensure target is met
+            target_reduction = int(overflow_pages * words_per_page)
             remaining = target_reduction
             
-            # Sort by trim priority
+            # Sort by trim priority (higher = trim first)
             sorted_sections = sorted(
                 sections_info.items(),
                 key=lambda x: SECTION_TRIM_PRIORITY.get(x[0], 5),
                 reverse=True
             )
             
+            # Dynamic cap based on overflow severity:
+            # <=1 page overflow -> 30% cap
+            # <=2 pages -> 50% cap
+            # >2 pages -> 60% cap
+            if overflow_pages <= 1:
+                trim_cap = 0.35
+            elif overflow_pages <= 2:
+                trim_cap = 0.50
+            else:
+                trim_cap = 0.60
+            
+            # Pass 1: allocate with initial cap
+            section_trims = {}
             for section_type, info in sorted_sections:
                 if remaining <= 0:
-                    advice[section_type] = SectionAdvice(
-                        section_type=section_type,
-                        current_length="appropriate",
-                        recommended_action="keep",
-                        priority=1,
-                    )
-                else:
+                    break
+                word_count = info.get("word_count", 0)
+                if word_count <= 0:
+                    continue
+                max_trim = int(word_count * trim_cap)
+                trim_amount = min(remaining, max_trim)
+                section_trims[section_type] = trim_amount
+                remaining -= trim_amount
+            
+            # Pass 2: if remaining > 0, increase allocation with higher cap
+            if remaining > 0:
+                higher_cap = min(trim_cap + 0.20, 0.70)
+                for section_type, info in sorted_sections:
+                    if remaining <= 0:
+                        break
                     word_count = info.get("word_count", 0)
-                    # Suggest trimming up to 30% of section
-                    max_trim = int(word_count * 0.3)
-                    trim_amount = min(remaining, max_trim)
-                    
+                    if word_count <= 0:
+                        continue
+                    already = section_trims.get(section_type, 0)
+                    max_trim = int(word_count * higher_cap)
+                    extra = max(0, max_trim - already)
+                    extra = min(remaining, extra)
+                    section_trims[section_type] = already + extra
+                    remaining -= extra
+            
+            # Build advice
+            for section_type, info in sorted_sections:
+                trim_amount = section_trims.get(section_type, 0)
+                if trim_amount > 0:
                     advice[section_type] = SectionAdvice(
                         section_type=section_type,
                         current_length="too_long",
@@ -625,12 +694,23 @@ class VLMReviewAgent(BaseAgent):
                         priority=SECTION_TRIM_PRIORITY.get(section_type, 5),
                         specific_guidance=f"Reduce by ~{trim_amount} words",
                     )
-                    remaining -= trim_amount
+                else:
+                    advice[section_type] = SectionAdvice(
+                        section_type=section_type,
+                        current_length="appropriate",
+                        recommended_action="keep",
+                        priority=1,
+                    )
         
         elif underfill_detected:
-            # Can expand
-            last_fill = page_analyses[-1].fill_percentage / 100 if page_analyses else 1.0
-            target_expansion = int((1 - last_fill) * words_per_page * 0.8)
+            # Can expand — find last body content page
+            last_content = None
+            for a in reversed(page_analyses):
+                if a.body_content_percentage > 20:
+                    last_content = a
+                    break
+            last_fill = last_content.fill_percentage / 100 if last_content else 1.0
+            target_expansion = int((1 - last_fill) * words_per_page * 0.9)
             remaining = target_expansion
             
             # Sort by expand priority
@@ -645,10 +725,10 @@ class VLMReviewAgent(BaseAgent):
                     break
                 
                 word_count = info.get("word_count", 0)
-                max_expand = int(word_count * 0.2)  # Up to 20% expansion
+                max_expand = int(word_count * 0.40)  # Up to 40% expansion
                 expand_amount = min(remaining, max_expand)
                 
-                if expand_amount > 50:  # Only suggest if meaningful
+                if expand_amount > 20:  # Lower threshold for meaningful expansion
                     advice[section_type] = SectionAdvice(
                         section_type=section_type,
                         current_length="too_short",

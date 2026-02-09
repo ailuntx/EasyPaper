@@ -365,11 +365,16 @@ class TypesetterAgent(BaseAgent):
         work_dir = state.get("work_dir")
         latex_content = state.get("latex_content", "")
         references = state.get("references", [])
+        sections_dict = state.get("sections") or {}
         
-        # Extract citation keys from latex_content
-        citation_ids = self._extract_citations_from_content(latex_content) if latex_content else []
-        logger.info("typesetter.extracted_citations count=%d keys=%s", 
-                   len(citation_ids), citation_ids[:5] if len(citation_ids) > 5 else citation_ids)
+        # Extract citation keys from ALL content (single-file + multi-file sections)
+        all_content = latex_content or ""
+        for sec_content in sections_dict.values():
+            all_content += "\n" + sec_content
+        citation_ids = self._extract_citations_from_content(all_content) if all_content.strip() else []
+        logger.info("typesetter.extracted_citations count=%d keys=%s (sections=%d)", 
+                   len(citation_ids), citation_ids[:5] if len(citation_ids) > 5 else citation_ids,
+                   len(sections_dict))
         
         bib_entries = []
         bib_content_parts = []
@@ -421,6 +426,22 @@ class TypesetterAgent(BaseAgent):
             else:
                 # Skip - reference data should be provided by upstream
                 logger.warning("typesetter.missing_reference key=%s (should be provided by upstream)", cid)
+        
+        # Safety fallback: if no citation keys extracted but references exist,
+        # write ALL provided references to .bib (ensures bibtex is never empty
+        # when references are available)
+        if not bib_content_parts and references:
+            logger.warning("typesetter.no_citations_extracted_but_refs_exist count=%d — writing all refs as fallback", len(references))
+            for ref in references:
+                if ref.get("bibtex"):
+                    bib_content_parts.append(ref["bibtex"].strip())
+                    ref_id = ref.get("ref_id") or ref.get("id") or "unknown"
+                    bib_entries.append(BibEntry(
+                        key=ref_id,
+                        entry_type="article",
+                        title=ref.get("title", ""),
+                        raw_bibtex=ref["bibtex"],
+                    ))
         
         # Write references.bib
         bib_path = os.path.join(work_dir, "references.bib")
@@ -526,7 +547,7 @@ class TypesetterAgent(BaseAgent):
         if config.paper_authors:
             title_section.append(f"\\author{{{config.paper_authors}}}")
         else:
-            title_section.append("\\author{Research Graph System}")
+            title_section.append("\\author{}")
         
         title_section.append("\\date{\\today}")
         
@@ -833,15 +854,19 @@ class TypesetterAgent(BaseAgent):
                 result
             )
         
-        # Step 2: Replace author if provided
-        if template_config.paper_authors:
-            authors = template_config.paper_authors
-            # Handle standard \author{...} - use lambda to avoid escape issues
-            result = re.sub(
-                r'\\author\{[^}]*\}',
-                lambda m: f'\\author{{{authors}}}',
-                result
-            )
+        # Step 2: Replace author — clear to empty unless explicitly set
+        authors = template_config.paper_authors or ""
+        result = re.sub(
+            r'\\author\{[^}]*\}',
+            lambda m: f'\\author{{{authors}}}',
+            result
+        )
+        
+        # Step 2b: Clear affiliation/institute if present in template
+        # (these are template-specific; clear them unless user provides values)
+        if not template_config.paper_authors:
+            result = re.sub(r'\\affiliation\{[^}]*\}', r'\\affiliation{}', result)
+            result = re.sub(r'\\institute\{[^}]*\}', r'\\institute{}', result)
         
         # Step 3: Find and replace abstract
         abstract_content = sections.get("abstract", "")

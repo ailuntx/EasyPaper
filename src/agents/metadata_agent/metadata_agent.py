@@ -79,6 +79,8 @@ class MetaDataAgent(BaseAgent):
         self.results_dir = Path(__file__).parent.parent.parent.parent / "results"
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self._router = self._create_router()
+        # Skill registry — injected post-construction by agents/__init__.py
+        self._skill_registry = None
     
     @property
     def name(self) -> str:
@@ -125,6 +127,24 @@ class MetaDataAgent(BaseAgent):
         """Create FastAPI router for this agent"""
         from .router import create_metadata_router
         return create_metadata_router(self)
+
+    def _get_active_skills(self, section_type: str, style_guide: str = None):
+        """
+        Retrieve active writing skills from the skill registry.
+
+        - **Args**:
+            - `section_type` (str): Current section being generated
+            - `style_guide` (str, optional): Venue name for venue-profile matching
+
+        - **Returns**:
+            - `list` of WritingSkill or None
+        """
+        if self._skill_registry is None or len(self._skill_registry) == 0:
+            return None
+        return self._skill_registry.get_writing_skills(
+            section_type=section_type,
+            venue=style_guide,
+        )
     
     async def generate_paper(
         self,
@@ -577,6 +597,7 @@ class MetaDataAgent(BaseAgent):
                 section_plan=section_plan,
                 figures=figures,
                 tables=tables,
+                active_skills=self._get_active_skills("introduction", metadata.style_guide),
             )
             
             # Adjust max_tokens based on target words
@@ -588,7 +609,7 @@ class MetaDataAgent(BaseAgent):
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": "You are an expert academic writer."},
+                    {"role": "system", "content": "You are an expert academic writer. Use present tense for methods, no contractions (it is, do not, cannot), no possessives on method names (the performance of X, not X's performance). Place key information at sentence end. Output pure LaTeX only."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
@@ -658,6 +679,7 @@ class MetaDataAgent(BaseAgent):
                 figures=figures,
                 tables=tables,
                 converted_tables=converted_tables,
+                active_skills=self._get_active_skills(section_type, metadata.style_guide),
             )
             
             # Adjust max_tokens based on target words
@@ -668,7 +690,7 @@ class MetaDataAgent(BaseAgent):
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": "You are an expert academic writer."},
+                    {"role": "system", "content": "You are an expert academic writer. Use present tense for methods, no contractions (it is, do not, cannot), no possessives on method names (the performance of X, not X's performance). Place key information at sentence end. Output pure LaTeX only."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
@@ -727,6 +749,7 @@ class MetaDataAgent(BaseAgent):
                 key_contributions=contributions,
                 style_guide=style_guide,
                 section_plan=section_plan,  # Pass plan for guidance
+                active_skills=self._get_active_skills(section_type, style_guide),
             )
             
             # Adjust max_tokens based on target words
@@ -738,7 +761,7 @@ class MetaDataAgent(BaseAgent):
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": "You are an expert academic writer."},
+                    {"role": "system", "content": "You are an expert academic writer. Use present tense for methods, no contractions (it is, do not, cannot), no possessives on method names (the performance of X, not X's performance). Place key information at sentence end. Output pure LaTeX only."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
@@ -2898,6 +2921,7 @@ class MetaDataAgent(BaseAgent):
         target_word_count = None
         pdf_path = None
         last_fingerprint = self._get_sections_fingerprint(generated_sections)
+        last_compiled_fingerprint = last_fingerprint  # track what was last compiled
         last_vlm_result = None
         
         if enable_review:
@@ -2990,6 +3014,7 @@ class MetaDataAgent(BaseAgent):
             
             # Compile PDF and run VLM review if enabled
             compile_succeeded = False
+            last_compiled_fingerprint = self._get_sections_fingerprint(generated_sections)
             if compile_pdf and template_path and paper_dir:
                 iteration_dir = paper_dir / f"iteration_{review_iterations:02d}"
                 iteration_dir.mkdir(parents=True, exist_ok=True)
@@ -3158,6 +3183,41 @@ class MetaDataAgent(BaseAgent):
             if not reviewer_revised_sections and not post_compile_revised and review_result.passed and (not last_vlm_result or last_vlm_result.get("passed", True)):
                 print("[MetaDataAgent] Exiting: no revisions needed and review passed")
                 break
+        
+        # =====================================================================
+        # Final compilation pass
+        # After the loop, revisions may have been applied (VLM/Typesetter)
+        # that were never compiled.  Run one more compile if content changed.
+        # =====================================================================
+        if compile_pdf and template_path and paper_dir:
+            final_fp = self._get_sections_fingerprint(generated_sections)
+            if final_fp != last_compiled_fingerprint:
+                print("[MetaDataAgent] Final pass: content changed since last compile — recompiling")
+                final_dir = paper_dir / f"iteration_{review_iterations:02d}_final"
+                final_dir.mkdir(parents=True, exist_ok=True)
+                figure_base_path = os.getcwd()
+                figure_paths = self._collect_figure_paths(metadata.figures, base_path=figure_base_path)
+                final_pdf, _, final_errors, _ = await self._compile_pdf(
+                    generated_sections=generated_sections,
+                    template_path=template_path,
+                    references=parsed_refs,
+                    output_dir=final_dir,
+                    paper_title=metadata.title,
+                    figures_source_dir=figures_source_dir,
+                    figure_paths=figure_paths,
+                    converted_tables=converted_tables,
+                    paper_plan=paper_plan,
+                    figures=metadata.figures,
+                    metadata_tables=metadata.tables,
+                )
+                if final_pdf:
+                    pdf_path = final_pdf
+                    print(f"[MetaDataAgent] Final pass compiled: {final_pdf}")
+                elif final_errors:
+                    errors.extend(final_errors)
+                    print(f"[MetaDataAgent] Final pass compile errors: {final_errors[:2]}")
+            else:
+                print("[MetaDataAgent] Final pass: no content changes since last compile — skipping")
         
         return generated_sections, sections_results, review_iterations, target_word_count, pdf_path, errors
     

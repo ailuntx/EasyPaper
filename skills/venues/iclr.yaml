@@ -1,0 +1,45 @@
+# ICLR Venue Profile
+# Sources: AI-Research-SKILLs SKILL.md Conference Requirements
+
+name: iclr
+description: >
+  Conference profile for ICLR (International Conference on Learning Representations).
+  Enforces ICLR-specific formatting, page limits, and style preferences.
+version: "1.0.0"
+tags:
+  - venue
+  - iclr
+  - ml
+  - representation-learning
+type: venue_profile
+target_sections:
+  - "*"
+priority: 15
+
+system_prompt_append: |
+  ## ICLR-Specific Guidelines
+  - Page limit: 10 pages of content + unlimited references and appendix
+  - Abstract: no strict limit, but keep concise (< 300 words recommended)
+  - ICLR uses OpenReview for double-blind peer review
+  - Style: emphasize representation learning insights and architectural novelty
+  - Strong theoretical motivation is valued alongside empirical results
+  - Reproducibility is critical — include implementation details
+  - Must use the official ICLR LaTeX template
+  - Prefer anonymized submissions: do NOT reveal author identity
+
+venue_config:
+  page_limit: 10
+  abstract_limit: 300
+  words_per_page: 800
+  required_sections:
+    - "Introduction"
+    - "Related Work"
+    - "Method"
+    - "Experiments"
+    - "Conclusion"
+  optional_sections:
+    - "Reproducibility Statement"
+    - "Ethics Statement"
+  template: "iclr2025"
+  anonymous: true
+  checklist: false

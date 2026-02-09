@@ -6,8 +6,9 @@ Reviewer Agent
     - Extensible architecture for adding new checkers
 """
 import logging
-from typing import List, Dict, Any, Optional, Type
+from typing import List, Dict, Any, Optional, Type, TYPE_CHECKING
 from fastapi import APIRouter
+from openai import AsyncOpenAI
 
 from ..base import BaseAgent
 from ...config.schema import ModelConfig
@@ -19,6 +20,11 @@ from .models import (
 )
 from .checkers.base import FeedbackChecker
 from .checkers.word_count import WordCountChecker
+from .checkers.style_check import StyleChecker
+from .checkers.logic_check import LogicChecker
+
+if TYPE_CHECKING:
+    from ...skills.registry import SkillRegistry
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -38,22 +44,66 @@ class ReviewerAgent(BaseAgent):
         WordCountChecker,
     ]
     
-    def __init__(self, config: ModelConfig):
-        """Initialize the Reviewer Agent"""
+    def __init__(
+        self,
+        config: ModelConfig,
+        skill_registry: Optional["SkillRegistry"] = None,
+    ):
+        """
+        Initialize the Reviewer Agent.
+
+        - **Args**:
+            - `config` (ModelConfig): Model configuration
+            - `skill_registry` (SkillRegistry, optional): Global skill registry
+              for loading checker rules and anti-patterns
+        """
         self.config = config
         self.model_name = config.model_name
         self._checkers: List[FeedbackChecker] = []
+        self._skill_registry = skill_registry
         self._router = self._create_router()
         
         # Register default checkers
         for checker_cls in self.DEFAULT_CHECKERS:
             self.register_checker(checker_cls())
         
+        # Register skill-based checkers
+        self._register_skill_checkers()
+        
         logger.info(
             "ReviewerAgent initialized with %d checkers: %s",
             len(self._checkers),
             [c.name for c in self._checkers]
         )
+
+    def _register_skill_checkers(self) -> None:
+        """
+        Dynamically register StyleChecker and LogicChecker.
+
+        - **Description**:
+            - StyleChecker is always registered (works with or without registry)
+            - LogicChecker is registered only when an LLM client can be created
+        """
+        # StyleChecker: pure rule-based, always available
+        self.register_checker(StyleChecker(skill_registry=self._skill_registry))
+
+        # LogicChecker: needs LLM client
+        try:
+            llm_client = AsyncOpenAI(
+                api_key=self.config.api_key,
+                base_url=self.config.base_url,
+            )
+            self.register_checker(
+                LogicChecker(
+                    llm_client=llm_client,
+                    model_name=self.model_name,
+                    skill_registry=self._skill_registry,
+                )
+            )
+        except Exception as e:
+            logger.warning(
+                "ReviewerAgent: could not initialize LogicChecker: %s", e
+            )
     
     @property
     def name(self) -> str:

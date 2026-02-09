@@ -56,5 +56,14 @@ class AgentConfig(BaseModel):
     vlm_review_config: Optional[VLMReviewConfig] = None
 
 
+class SkillsConfig(BaseModel):
+    """Skills system configuration."""
+    enabled: bool = True
+    skills_dir: str = "./skills"
+    active_skills: List[str] = Field(default_factory=lambda: ["*"])  # "*" = all
+    venue_profile: Optional[str] = None  # "neurips", "icml", etc.
+
+
 class AppConfig(BaseModel):
     agents: List[AgentConfig]
+    skills: Optional[SkillsConfig] = None

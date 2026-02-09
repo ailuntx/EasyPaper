@@ -1,0 +1,67 @@
+# Style Check Reviewer Skill
+# Provides rule definitions for the StyleChecker feedback checker.
+
+name: style-check
+description: >
+  Rule-based style checking for AI-style language, contractions, excessive
+  em-dashes, and formulaic structures. Used by StyleChecker.
+version: "1.0.0"
+tags:
+  - reviewing
+  - style
+  - rules
+type: reviewer_checker
+target_sections:
+  - "*"
+priority: 20
+
+system_prompt_append: ""
+
+revision_guidance: |
+  Fix style violations by:
+  1. Replacing flagged AI-style words with concrete academic alternatives
+  2. Expanding contractions to full forms
+  3. Reducing em-dash usage to at most one per paragraph
+  4. Breaking up "First, ... Second, ... Third, ..." patterns
+
+anti_patterns:
+  - "delve"
+  - "leverage"
+  - "tapestry"
+  - "First and foremost"
+  - "it is worth noting"
+  - "rapidly evolving"
+  - "a testament to"
+  - "multifaceted"
+  - "underscores"
+  - "spearhead"
+  - "at the forefront"
+  - "game-changer"
+  - "revolutionize"
+  - "groundbreaking"
+  - "paradigm shift"
+  - "holistic approach"
+  - "synergy"
+  - "plays a crucial role"
+  - "are poised to"
+  - "in the realm of"
+  - "a myriad of"
+  - "utilize"
+  - "facilitate"
+  - "endeavor"
+  - "elucidate"
+  - "aforementioned"
+  - "it's"
+  - "don't"
+  - "can't"
+  - "won't"
+  - "we've"
+  - "hasn't"
+  - "wouldn't"
+  - "shouldn't"
+
+# Thresholds for the StyleChecker (custom fields read by the checker)
+venue_config:
+  em_dash_density_max: 2.0       # max em-dashes per 1000 words
+  three_part_parallel_max: 1     # max "First...Second...Third" per section
+  stacked_connectives_max: 2     # max consecutive connective-adverb sentences

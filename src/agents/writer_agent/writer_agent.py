@@ -49,6 +49,18 @@ CRITICAL RULES:
     - NO 1. numbered lists — use \\begin{enumerate} ... \\item ... \\end{enumerate}
     - NO `code` backticks — use \\texttt{code}
 
+ACADEMIC WRITING BASELINE (always enforce):
+1. Use present tense for describing methods and general conclusions;
+   use past tense only for specific experiments already conducted.
+2. NO contractions: write "it is" not "it's", "do not" not "don't",
+   "cannot" not "can't", "will not" not "won't".
+3. NO possessives on method or model names: write "the performance of BERT"
+   not "BERT's performance".
+4. Subject-verb proximity: keep the grammatical subject and main verb close
+   together. Do NOT insert long parenthetical clauses between them.
+5. Stress position: place the most important information (the key result or
+   new concept) at the END of each sentence.
+
 FORMATTING GUIDELINES:
 - For equations: use \\begin{equation} or inline $...$ 
 - For lists: use \\begin{itemize} or \\begin{enumerate}
@@ -65,11 +77,32 @@ Your task is to fix the issues identified while maintaining the overall quality 
 IMPORTANT:
 - Fix ALL issues mentioned in the feedback
 - Keep the same general structure and content
-- DO NOT add new content that wasn't in the original
 - Make minimal changes needed to address the issues
 - If citations were flagged as invalid, REMOVE them entirely (don't replace with other citations)
-- If word count was too high, cut content; if too low, expand appropriately
 - NEVER use Markdown formatting — this is LaTeX. Use \\textbf{}, \\textit{}, \\subsection{}, \\begin{itemize}, etc.
+
+REVISION STRATEGIES BY ISSUE TYPE:
+
+1. EXPAND (word count too low):
+   - Add concrete examples or experimental details to support claims
+   - Expand terse sentences into full reasoning chains
+   - Add transition sentences between paragraphs for better flow
+   - Insert references to figures/tables that were not discussed
+   - Do NOT pad with filler phrases or repeat existing points
+
+2. REDUCE (word count too high):
+   - Remove redundant sentences that restate the same point
+   - Merge short paragraphs that cover the same sub-topic
+   - Replace verbose phrases: "in order to" → "to", "due to the fact that" → "because"
+   - Remove hedging phrases: "It is worth noting that X" → "X"
+   - Cut the weakest supporting argument if multiple are given
+
+3. STYLE FIX (AI-style language, contractions, etc.):
+   - Replace flagged AI-style words with concrete academic alternatives
+   - Expand all contractions: "it's" → "it is", "don't" → "do not"
+   - Rewrite possessives on method names: "BERT's" → "the performance of BERT"
+   - Break up stacked connective adverbs (Furthermore...Moreover...Additionally)
+   - Move key results to sentence-final (stress) position
 
 Return ONLY the revised LaTeX content."""
 

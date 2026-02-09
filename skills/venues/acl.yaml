@@ -1,0 +1,48 @@
+# ACL Venue Profile
+# Sources: AI-Research-SKILLs SKILL.md Conference Requirements
+
+name: acl
+description: >
+  Conference profile for ACL (Association for Computational Linguistics).
+  Enforces ACL-specific formatting, page limits, and required sections.
+version: "1.0.0"
+tags:
+  - venue
+  - acl
+  - nlp
+type: venue_profile
+target_sections:
+  - "*"
+priority: 15
+
+system_prompt_append: |
+  ## ACL-Specific Guidelines
+  - Long paper: 8 pages of content + unlimited references and appendix
+  - Short paper: 4 pages of content + unlimited references
+  - Abstract: max 250 words
+  - ACL REQUIRES a "Limitations" section — this is mandatory and NOT optional
+  - ACL values thorough Related Work analysis — be comprehensive
+  - Error analysis and qualitative examples are highly valued
+  - ACL uses ARR (ACL Rolling Review) with commitment to specific venues
+  - Must use official ACL LaTeX template (*-acl style)
+  - ACL Responsible NLP Checklist must be completed
+  - Prefer anonymized submissions
+
+venue_config:
+  page_limit: 8
+  abstract_limit: 250
+  words_per_page: 850
+  required_sections:
+    - "Introduction"
+    - "Related Work"
+    - "Method"
+    - "Experiments"
+    - "Limitations"
+    - "Conclusion"
+  optional_sections:
+    - "Ethics Statement"
+    - "Acknowledgments"
+  template: "acl2025"
+  anonymous: true
+  checklist: true
+  short_paper_page_limit: 4
