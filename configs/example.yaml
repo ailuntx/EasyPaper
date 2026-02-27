@@ -1,3 +1,23 @@
+# Skills system configuration
+skills:
+  enabled: true
+  skills_dir: "./skills"
+  active_skills:
+    - "*"
+
+# Tools configuration for ReAct-enabled agents (MetaDataAgent, WriterAgent)
+tools:
+  enabled: true
+  available_tools:
+    - validate_citations
+    - count_words
+    - check_key_points
+    - search_papers
+  max_react_iterations: 3
+  paper_search:
+    # semantic_scholar_api_key: null  # Optional: set for higher rate limits
+    timeout: 15
+
 agents:
   - name: paper_parser
     model:
@@ -57,19 +77,6 @@ agents:
       model_name: kimi-k2-turbo-preview
       api_key: YOUR_API_KEY
       base_url: https://api.moonshot.cn/v1
-
-# Tools configuration for ReAct-enabled agents (MetaDataAgent, WriterAgent)
-# tools:
-#   enabled: true
-#   available_tools:
-#     - validate_citations
-#     - count_words
-#     - check_key_points
-#     - search_papers
-#   max_react_iterations: 3
-#   paper_search:
-#     semantic_scholar_api_key: null  # Optional: set for higher rate limits
-#     timeout: 10
 
   - name: vlm_review
     # VLM provider is configured via vlm_service below; only agent behavior here
