@@ -28,7 +28,7 @@ from .models import ResourceInfo, BibEntry, CompilationResult, TemplateConfig
 
 
 # Backend API URL for fetching resources
-BACKEND_API_URL = "http://127.0.0.1:9001/api"
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://127.0.0.1:9001/api")
 
 # Logger for typesetter agent
 logger = logging.getLogger("uvicorn.error")

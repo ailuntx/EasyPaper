@@ -11,6 +11,7 @@ from ..shared.llm_client import LLMClient
 from typing_extensions import TypedDict, Annotated, Optional
 from langgraph.graph import StateGraph, START, END
 import operator
+import os
 import json
 import httpx
 from typing import List, Dict, Any
@@ -45,7 +46,7 @@ BACKGROUND_NODE_TYPES = {"literature", "concept"}
 
 
 # Backend API URL for graph data
-BACKEND_API_URL = "http://127.0.0.1:9001/api"
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://127.0.0.1:9001/api")
 
 
 SECTION_PROMPTS = {

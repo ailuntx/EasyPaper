@@ -975,7 +975,7 @@ def create_paper_assembly_endpoint(router: APIRouter, agent_instance, logger: lo
                     try:
                         async with httpx.AsyncClient() as client:
                             parse_response = await client.post(
-                                "http://127.0.0.1:8000/agent/template/parse",
+                                f"{os.getenv('AGENTSYS_SELF_URL', 'http://127.0.0.1:8000')}/agent/template/parse",
                                 json={
                                     "user_id": "paper_assembly",
                                     "payload": {
@@ -1027,7 +1027,7 @@ def create_paper_assembly_endpoint(router: APIRouter, agent_instance, logger: lo
                 # Call Typesetter to compile
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        "http://127.0.0.1:8000/agent/typesetter/compile",
+                        f"{os.getenv('AGENTSYS_SELF_URL', 'http://127.0.0.1:8000')}/agent/typesetter/compile",
                         json={
                             "request_id": f"assembly_{timestamp}",
                             "user_id": "paper_assembly",

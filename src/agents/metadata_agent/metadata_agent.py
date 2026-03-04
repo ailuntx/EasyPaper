@@ -3824,7 +3824,7 @@ class MetaDataAgent(ReActAgent):
             # Call Typesetter Agent API with multi-file sections dict
             async with httpx.AsyncClient(timeout=600.0) as client:
                 response = await client.post(
-                    "http://localhost:8000/agent/typesetter/compile",
+                    f"{os.getenv('AGENTSYS_SELF_URL', 'http://127.0.0.1:8000')}/agent/typesetter/compile",
                     json={
                         "request_id": str(uuid.uuid4()),
                         "payload": {

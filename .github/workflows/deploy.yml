@@ -1,0 +1,49 @@
+name: Build & Push EasyPaper
+
+on:
+  push:
+    branches: [commercial]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/easypaper
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  notify-academichub:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Trigger academicHub deploy
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.ACADEMICHUB_PAT }}
+          repository: ${{ github.repository_owner }}/academicHub
+          event-type: agentsys-updated
