@@ -1,8 +1,24 @@
 from fastapi import APIRouter, HTTPException, status
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 import time
 import logging
+from pydantic import BaseModel, Field
 from .models import ParsePayload, ParseResult
+
+
+class PaperSearchRequest(BaseModel):
+    query: str
+    max_results: int = Field(default=5, ge=1, le=20)
+    source: str = Field(default="semantic_scholar", pattern="^(semantic_scholar|arxiv)$")
+    year_range: Optional[str] = None
+    query_field: str = Field(default="all", pattern="^(all|ti|abs|au|cat)$")
+
+
+class PaperSearchResponse(BaseModel):
+    papers: List[Dict[str, Any]]
+    bibtex: str
+    total_found: int
+
 
 def create_parse_router(agent_instance):
     """Create router for parse agent endpoints"""
@@ -49,6 +65,48 @@ def create_parse_router(agent_instance):
                 request_id=payload.request_id,
                 status="error",
                 error=str(e)
+            )
+
+    @router.post(
+        "/agent/papers/search",
+        response_model=PaperSearchResponse,
+        status_code=status.HTTP_200_OK,
+    )
+    async def search_papers(req: PaperSearchRequest):
+        """
+        Search academic papers via Semantic Scholar or arXiv.
+        - **Description**:
+            - Instantiates PaperSearchTool and runs a search query.
+            - Returns paper metadata with BibTeX entries.
+        """
+        from ..shared.tools.paper_search import PaperSearchTool
+
+        tool = PaperSearchTool()
+        start = time.time()
+        logger.info("papers.search query=%r source=%s max=%d", req.query, req.source, req.max_results)
+
+        try:
+            result = await tool.execute(
+                query=req.query,
+                max_results=req.max_results,
+                source=req.source,
+                year_range=req.year_range,
+                query_field=req.query_field,
+            )
+            latency = time.time() - start
+            logger.info("papers.search.complete latency=%.3f found=%d", latency, result.data.get("total_found", 0))
+
+            return PaperSearchResponse(
+                papers=result.data.get("papers", []),
+                bibtex=result.data.get("bibtex", ""),
+                total_found=result.data.get("total_found", 0),
+            )
+        except Exception as e:
+            latency = time.time() - start
+            logger.error("papers.search.error latency=%.3f error=%s", latency, str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Paper search failed: {str(e)}",
             )
 
     return router

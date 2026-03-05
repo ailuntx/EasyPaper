@@ -29,7 +29,7 @@ class SemanticScholarClient:
     """
 
     BASE_URL = "https://api.semanticscholar.org/graph/v1"
-    FIELDS = "paperId,title,authors,year,abstract,venue,citationCount,externalIds,publicationTypes,journal"
+    FIELDS = "paperId,title,authors,year,abstract,venue,citationCount,externalIds,publicationTypes,journal,openAccessPdf"
 
     # Maximum number of retries on 429 (rate limit)
     MAX_RETRIES = 6
@@ -147,6 +147,8 @@ class SemanticScholarClient:
         arxiv_id = external_ids.get("ArXiv")
         journal_info = item.get("journal", {}) or {}
 
+        open_access = item.get("openAccessPdf", {}) or {}
+
         paper = {
             "source": "semantic_scholar",
             "paper_id": item.get("paperId", ""),
@@ -158,6 +160,7 @@ class SemanticScholarClient:
             "citation_count": item.get("citationCount", 0),
             "doi": doi,
             "arxiv_id": arxiv_id,
+            "open_access_pdf": open_access.get("url"),
             "bibtex_key": self._generate_bibtex_key(authors, year, title),
         }
 
@@ -252,6 +255,7 @@ class ArxivClient:
         query: str,
         max_results: int = 5,
         year_range: Optional[str] = None,
+        query_field: str = "all",
     ) -> List[Dict[str, Any]]:
         """
         Search for papers on arXiv.
@@ -260,12 +264,12 @@ class ArxivClient:
             - `query` (str): Search query string.
             - `max_results` (int): Maximum number of results.
             - `year_range` (str, optional): Year range (used for post-filtering).
+            - `query_field` (str): arXiv search field prefix — "all", "ti", "abs", etc. Defaults to "all".
 
         - **Returns**:
             - `List[dict]`: List of paper dicts with standardized fields.
         """
-        # Build arXiv query (httpx handles URL encoding automatically)
-        search_query = f"all:{query}"
+        search_query = f"{query_field}:{query}"
 
         params = {
             "search_query": search_query,
@@ -625,12 +629,16 @@ class PaperSearchTool(WriterTool):
         query: str,
         max_results: int,
         year_range: Optional[str],
+        query_field: str = "all",
     ) -> List[Dict[str, Any]]:
         """
         Search arXiv with circuit-breaker and fast timeout.
         - **Description**:
             - Skips the call entirely if arXiv is in cooldown.
             - Sets cooldown on 429 errors to avoid repeated failures.
+
+        - **Args**:
+            - `query_field` (str): arXiv field prefix ("all", "ti", "abs", etc.). Defaults to "all".
 
         - **Returns**:
             - `List[dict]`: Papers found, or empty list on failure.
@@ -642,11 +650,9 @@ class PaperSearchTool(WriterTool):
             query=query,
             max_results=max_results,
             year_range=year_range,
+            query_field=query_field,
         )
 
-        # The ArxivClient returns [] on errors; we check if it was a 429
-        # by hooking into the client. Since we can't easily detect 429 from
-        # the return value, we do a direct check here.
         return papers
 
     async def execute(
@@ -655,6 +661,7 @@ class PaperSearchTool(WriterTool):
         max_results: Optional[int] = None,
         year_range: Optional[str] = None,
         source: str = "semantic_scholar",
+        query_field: str = "all",
         **kwargs,
     ) -> ToolResult:
         """
@@ -670,6 +677,7 @@ class PaperSearchTool(WriterTool):
             - `max_results` (int, optional): Max papers to return.
             - `year_range` (str, optional): Year range filter.
             - `source` (str): Search source. Default "semantic_scholar".
+            - `query_field` (str): arXiv search field — "all", "ti", "abs", etc. Defaults to "all".
 
         - **Returns**:
             - `ToolResult` with data containing:
@@ -740,6 +748,7 @@ class PaperSearchTool(WriterTool):
                     query=query,
                     max_results=needed,
                     year_range=year_range,
+                    query_field=query_field,
                 )
                 arxiv_added = self._merge_unique_by_title(all_papers, seen_titles, arxiv_papers)
                 round_added += arxiv_added
@@ -761,6 +770,7 @@ class PaperSearchTool(WriterTool):
         elif source == "arxiv":
             arxiv_papers = await self._search_arxiv_safe(
                 query=query, max_results=max_res, year_range=year_range,
+                query_field=query_field,
             )
             arxiv_added = self._merge_unique_by_title(all_papers, seen_titles, arxiv_papers)
             if arxiv_papers or arxiv_added:
@@ -802,7 +812,7 @@ class PaperSearchTool(WriterTool):
             summary = {
                 "bibtex_key": p["bibtex_key"],
                 "title": p["title"],
-                "authors": p["authors"][:5],  # Limit to 5 authors for brevity
+                "authors": p["authors"][:5],
                 "year": p["year"],
                 "venue": p["venue"],
                 "source": p.get("source", ""),
@@ -810,7 +820,10 @@ class PaperSearchTool(WriterTool):
                 "abstract": (p.get("abstract", "")[:300] + "...")
                             if p.get("abstract") and len(p.get("abstract", "")) > 300
                             else p.get("abstract", ""),
-                "bibtex": p.get("bibtex", ""),  # Include for ref_pool merging
+                "bibtex": p.get("bibtex", ""),
+                "doi": p.get("doi"),
+                "arxiv_id": p.get("arxiv_id"),
+                "open_access_pdf": p.get("open_access_pdf"),
             }
             paper_summaries.append(summary)
 

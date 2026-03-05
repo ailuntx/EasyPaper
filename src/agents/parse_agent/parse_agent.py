@@ -2,6 +2,7 @@ from langchain.messages import AnyMessage
 from ..shared.llm_client import LLMClient
 from typing_extensions import TypedDict, Annotated, Optional, IO
 from langgraph.graph import StateGraph, START, END
+import asyncio
 import operator
 from pathlib import Path
 import json
@@ -37,11 +38,64 @@ Please output in JSON format.
 }
 """
 
+MAX_TEXT_CHARS = 48_000
+MAX_RETRIES = 3
+RETRY_BASE_WAIT = 3
+
+
+def _extract_pdf_text(path: str) -> str:
+    """
+    Extract text from a PDF using PyMuPDF (fitz).
+    - **Description**:
+        - Falls back gracefully if the file cannot be read.
+        - Truncates to MAX_TEXT_CHARS to stay within LLM context limits.
+
+    - **Args**:
+        - `path` (str): Absolute path to the PDF file.
+
+    - **Returns**:
+        - `str`: Extracted text content.
+    """
+    import fitz
+    doc = fitz.open(path)
+    pages = []
+    for page in doc:
+        pages.append(page.get_text())
+    doc.close()
+    text = "\n\n".join(pages)
+    if len(text) > MAX_TEXT_CHARS:
+        text = text[:MAX_TEXT_CHARS] + "\n... [truncated]"
+    return text
+
+
+def _extract_bytes_text(content: IO[bytes]) -> str:
+    """
+    Extract text from in-memory PDF bytes using PyMuPDF.
+
+    - **Args**:
+        - `content` (IO[bytes]): File-like object with PDF bytes.
+
+    - **Returns**:
+        - `str`: Extracted text content.
+    """
+    import fitz
+    raw = content.read() if hasattr(content, "read") else content
+    doc = fitz.open(stream=raw, filetype="pdf")
+    pages = []
+    for page in doc:
+        pages.append(page.get_text())
+    doc.close()
+    text = "\n\n".join(pages)
+    if len(text) > MAX_TEXT_CHARS:
+        text = text[:MAX_TEXT_CHARS] + "\n... [truncated]"
+    return text
+
+
 class ParseAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], operator.add]
     file_path: Optional[str] = None
     file_content: Optional[IO[bytes]] = None
-    file_id: Optional[str] = None
+    paper_text: Optional[str] = None
     understand_result: Optional[dict] = None
     llm_calls: int
 
@@ -56,46 +110,68 @@ class ParseAgent(BaseAgent):
 
     def init_agent(self):
         agent_builder = StateGraph(ParseAgentState)
-        agent_builder.add_node("upload_file", self.upload_file)
+        agent_builder.add_node("extract_text", self.extract_text)
         agent_builder.add_node("understand_paper", self.understand_paper)
-        agent_builder.add_edge(START, "upload_file")
-        agent_builder.add_edge("upload_file", "understand_paper")
+        agent_builder.add_edge(START, "extract_text")
+        agent_builder.add_edge("extract_text", "understand_paper")
         agent_builder.add_edge("understand_paper", END)
         return agent_builder.compile()
 
-    async def upload_file(self, state: ParseAgentState):
-        """Upload a file to the model"""
-        print(f"INPUT STATE [upload_file]: {state}")
-        if state["file_path"]:
-            file_obj = await self.client.files.create(file=Path(state["file_path"]), purpose="file-extract")
-        elif state["file_content"]:
-            file_obj = await self.client.files.create(file=state["file_content"], purpose="file-extract")
+    async def extract_text(self, state: ParseAgentState):
+        """Extract text from PDF locally using PyMuPDF instead of remote Files API."""
+        print(f"INPUT STATE [extract_text]: file_path={state.get('file_path')}, "
+              f"has_content={state.get('file_content') is not None}")
+
+        if state.get("file_path"):
+            text = _extract_pdf_text(state["file_path"])
+        elif state.get("file_content"):
+            text = _extract_bytes_text(state["file_content"])
         else:
             raise ValueError("Either file_path or file_content must be provided")
-        state["file_id"] = file_obj.id
-        return state
+
+        print(f"[extract_text] Extracted {len(text)} chars from PDF")
+        return {"paper_text": text}
 
     async def understand_paper(self, state: ParseAgentState):
-        """Understand the paper"""
-        print(f"INPUT STATE [understand_paper]: {state}")
-        if state["file_id"]:
-            file_obj = await self.client.files.content(file_id=state["file_id"])
-            file_obj = file_obj.text
-            file_content = json.loads(file_obj)['content']
-            response = await self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": UNDERSTAND_PROMPT},
-                    {"role": "user", "content": f"<paper>{file_content}</paper>"}
-                ],
-                response_format={'type': 'json_object'}
-            )
-            await self.client.files.delete(file_id=state["file_id"])
-        else:
-            raise ValueError("File ID must be provided")
-        return {
-            "understand_result": json.loads(response.choices[0].message.content)
-        }
+        """
+        Understand the paper by sending extracted text to the LLM.
+        - **Description**:
+            - Retries up to MAX_RETRIES times with exponential backoff on
+              transient server errors (busy, 429, 5xx).
+        """
+        paper_text = state.get("paper_text")
+        if not paper_text:
+            raise ValueError("No paper text available for analysis")
+
+        print(f"INPUT STATE [understand_paper]: text_len={len(paper_text)}")
+
+        last_error = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": UNDERSTAND_PROMPT},
+                        {"role": "user", "content": f"<paper>{paper_text}</paper>"}
+                    ],
+                    response_format={'type': 'json_object'}
+                )
+                return {
+                    "understand_result": json.loads(response.choices[0].message.content)
+                }
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                is_transient = any(k in err_str for k in ("busy", "retry", "429", "500", "502", "503", "overloaded"))
+                if is_transient and attempt < MAX_RETRIES:
+                    wait = RETRY_BASE_WAIT * (2 ** (attempt - 1))
+                    print(f"[understand_paper] Transient error (attempt {attempt}/{MAX_RETRIES}), "
+                          f"retrying in {wait}s: {e}")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+
+        raise last_error  # type: ignore[misc]
 
     async def run(self, file_path: Optional[str] = None, file_content: Optional[IO[bytes]] = None):
         """Run the agent"""

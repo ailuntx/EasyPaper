@@ -141,7 +141,9 @@ async def lifespan(app: FastAPI):
     # Print model info for each agent (never print api keys)
     for agent_cfg in config.agents:
         model = agent_cfg.model
-        # Mask base_url to show only the host
+        if model is None:
+            print(f"   {agent_cfg.name:<20} model=(none)")
+            continue
         base_host = model.base_url.rstrip("/").split("//")[-1].split("/")[0] if model.base_url else "default"
         extra = ""
         if agent_cfg.vlm_review_config and agent_cfg.vlm_review_config.vlm_model:
