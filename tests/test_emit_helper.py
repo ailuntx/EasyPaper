@@ -1,8 +1,8 @@
 """Tests for MetaDataAgent._emit static helper."""
 import pytest
 
-from src.events import EventEmitter, EventType, GenerationEvent
-from src.agents.metadata_agent.metadata_agent import MetaDataAgent
+from easypaper.events import EventEmitter, EventType, GenerationEvent
+from easypaper.agents.metadata_agent.metadata_agent import MetaDataAgent
 
 
 class TestEmitHelper:

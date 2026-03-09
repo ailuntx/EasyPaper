@@ -44,8 +44,9 @@ python_functions = "test_*"
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
 
-[tool.setuptools.package-dir]
-easypaper = "src"
-
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["easypaper", "easypaper.*"]
+
+[tool.uv.workspace]
+members = ["user_case"]

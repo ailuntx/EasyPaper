@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from src.events import EventEmitter, EventType, GenerationEvent
+from easypaper.events import EventEmitter, EventType, GenerationEvent
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,45 @@
+# EasyPaper SDK — Minimal Config Example
+# Copy this file to config.yaml and fill in your API keys.
+#
+#   cp config.example.yaml config.yaml
+
+agents:
+  - name: metadata
+    model:
+      model_name: gpt-4o          # or any OpenAI-compatible model
+      api_key: YOUR_API_KEY
+      base_url: https://api.openai.com/v1
+
+  - name: writer
+    model:
+      model_name: gpt-4o
+      api_key: YOUR_API_KEY
+      base_url: https://api.openai.com/v1
+    writer_config:
+      max_review_iterations: 2
+      enable_review: true
+      enable_tools: true
+      available_tools:
+        - validate_citations
+        - count_words
+        - check_key_points
+
+  - name: reviewer
+    model:
+      model_name: gpt-4o
+      api_key: YOUR_API_KEY
+      base_url: https://api.openai.com/v1
+
+  - name: planner
+    model:
+      model_name: gpt-4o
+      api_key: YOUR_API_KEY
+      base_url: https://api.openai.com/v1
+
+tools:
+  enabled: true
+  available_tools:
+    - validate_citations
+    - count_words
+    - check_key_points
+  max_react_iterations: 3
