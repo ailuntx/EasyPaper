@@ -124,6 +124,79 @@ curl -X POST http://localhost:8000/metadata/generate \
   -d @economist_example/metadata.json
 ```
 
+## Skills
+
+EasyPaper includes a pluggable **Skills** system that injects writing constraints, venue-specific
+formatting rules, and reviewer checkers into the generation pipeline. The repository ships
+pre-built skills in [`skills/`](skills/):
+
+| Category | Skills | Description |
+|---|---|---|
+| **Writing** | `anti-ai-style`, `academic-polish`, `latex-conventions` | Style constraints applied to all sections — eliminates AI-flavored phrasing, enforces academic tone, ensures LaTeX best practices |
+| **Venues** | `neurips`, `icml`, `iclr`, `acl`, `aaai`, `colm`, `nature` | Conference/journal profiles with page limits, formatting rules, and venue-specific style requirements |
+| **Reviewing** | `logic-check`, `style-check` | Reviewer checker prompts — detects logical contradictions, terminology inconsistencies, and style violations |
+
+### Enabling skills
+
+Add a `skills` section to your config YAML and point `skills_dir` to a directory containing
+`.yaml` skill files:
+
+```yaml
+skills:
+  enabled: true
+  skills_dir: "./skills"    # path to skill YAML files
+  active_skills:
+    - "*"                   # "*" = load all skills; or list specific names
+```
+
+To use the built-in skills, copy the [`skills/`](skills/) directory into your project:
+
+```bash
+cp -r /path/to/easypaper/skills ./skills
+```
+
+If `skills_dir` does not exist or `skills.enabled` is `false`, skills are silently skipped —
+no configuration is required for basic usage.
+
+### Venue profiles
+
+To apply venue-specific constraints (e.g. page limits, formatting), set `style_guide` in your
+`PaperMetaData` to match a venue profile name:
+
+```python
+metadata = PaperMetaData(
+    title="...",
+    idea_hypothesis="...",
+    method="...",
+    data="...",
+    experiments="...",
+    style_guide="neurips",   # activates the neurips venue profile
+)
+```
+
+### Custom skills
+
+Each skill is a single YAML file with the following structure:
+
+```yaml
+name: my-custom-skill
+description: "What this skill does"
+type: writing_constraint   # writing_constraint | reviewer_checker | venue_profile
+target_sections: ["*"]     # ["*"] = all sections, or specific ones
+priority: 10               # lower = higher priority
+
+system_prompt_append: |
+  ## My Custom Rules
+  - Rule 1: ...
+  - Rule 2: ...
+
+anti_patterns:
+  - "word to avoid"
+```
+
+Drop the file into your `skills_dir` and it will be automatically loaded on the next run.
+See the built-in skills in [`skills/`](skills/) for complete examples.
+
 ## Config
 
 The application loads configuration from `AGENT_CONFIG_PATH` (defaults to `./configs/dev.yaml`).
@@ -138,7 +211,7 @@ Key fields per agent:
 - `base_url` — API endpoint URL
 
 Additional top-level sections:
-- `skills` — skills system toggle and active skill list
+- `skills` — skills system toggle and active skill list (see [Skills](#skills))
 - `tools` — ReAct tool configuration (citation validation, paper search, etc.)
 - `vlm_service` — shared VLM provider for visual review (supports OpenAI-compatible and Claude)
 
@@ -146,6 +219,7 @@ Additional top-level sections:
 
 - `easypaper/` — SDK core, agent implementations, event system, shared utilities
 - `configs/` — YAML configs for agents and models
+- `skills/` — built-in writing skills, venue profiles, and reviewer checkers
 - `scripts/` — CLI utilities and demos
 - `user_case/` — standalone usage example (independent environment)
 - `economist_example/` — sample metadata input

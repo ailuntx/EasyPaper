@@ -206,19 +206,20 @@ class EasyPaper:
             tools_config=global_tools,
         )
 
-        # SkillRegistry is optional; load if skills config is present
+        # SkillRegistry is optional; only load when the directory actually exists
         skill_registry = None
         if config.skills and config.skills.enabled:
-            try:
-                from .skills.loader import SkillLoader
-                from .skills.registry import SkillRegistry
-                skill_registry = SkillRegistry()
-                loader = SkillLoader()
-                skills = loader.load_directory(Path(config.skills.skills_dir))
-                for skill in skills:
-                    skill_registry.register(skill)
-            except Exception:
-                skill_registry = None
+            skills_path = Path(config.skills.skills_dir)
+            if skills_path.is_dir():
+                try:
+                    from .skills.loader import SkillLoader
+                    from .skills.registry import SkillRegistry
+                    skill_registry = SkillRegistry()
+                    loader = SkillLoader()
+                    for skill in loader.load_directory(skills_path):
+                        skill_registry.register(skill)
+                except Exception:
+                    skill_registry = None
 
         reviewer = ReviewerAgent(
             config=_model("reviewer"),
