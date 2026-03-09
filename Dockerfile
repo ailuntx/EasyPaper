@@ -6,9 +6,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[server]"
 
 COPY . .
 
 EXPOSE 8000
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "easypaper.main:app", "--host", "0.0.0.0", "--port", "8000"]

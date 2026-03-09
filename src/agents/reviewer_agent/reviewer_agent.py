@@ -9,7 +9,6 @@ import logging
 import json
 import re
 from typing import List, Dict, Any, Optional, Type, TYPE_CHECKING
-from fastapi import APIRouter
 from ..base import BaseAgent
 from ..shared.llm_client import LLMClient
 from ...config.schema import ModelConfig
@@ -68,7 +67,10 @@ class ReviewerAgent(BaseAgent):
         self.model_name = config.model_name
         self._checkers: List[FeedbackChecker] = []
         self._skill_registry = skill_registry
-        self._router = self._create_router()
+        try:
+            self._router = self._create_router()
+        except Exception:
+            self._router = None
         
         # Register default checkers
         for checker_cls in self.DEFAULT_CHECKERS:
@@ -122,7 +124,7 @@ class ReviewerAgent(BaseAgent):
         return "Reviews paper content and provides feedback for improvement"
     
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         return self._router
     
     @property
@@ -145,7 +147,7 @@ class ReviewerAgent(BaseAgent):
             },
         ]
     
-    def _create_router(self) -> APIRouter:
+    def _create_router(self) -> "APIRouter":
         """Create FastAPI router"""
         from .router import create_reviewer_router
         return create_reviewer_router(self)

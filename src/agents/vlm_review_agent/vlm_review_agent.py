@@ -11,7 +11,6 @@ import os
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
-from fastapi import APIRouter
 from langgraph.graph import StateGraph, END
 from typing_extensions import TypedDict
 
@@ -887,10 +886,13 @@ class VLMReviewAgent(BaseAgent):
         return "VLM-based PDF review agent for page overflow, underfill, and layout detection"
     
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         """Return the FastAPI router for this agent"""
-        from .router import create_vlm_review_router
-        return create_vlm_review_router(self)
+        try:
+            from .router import create_vlm_review_router
+            return create_vlm_review_router(self)
+        except Exception:
+            return None
     
     @property
     def endpoints_info(self) -> List[Dict[str, Any]]:

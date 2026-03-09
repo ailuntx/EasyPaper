@@ -3,11 +3,11 @@
 CLI Tool for MetaData-based Paper Generation
 
 This script calls the MetaData Agent API to generate papers.
-Requires the agentsys server to be running on port 8000.
+Requires the easypaper server to be running on port 8000.
 
 Usage:
     # Start the server first:
-    cd agentsys && uv run uvicorn src.main:app --reload --port 8000
+    uv run uvicorn easypaper.main:app --reload --port 8000
     
     # Then run the CLI:
     python scripts/generate_paper.py --input examples/transkg_metadata.json
@@ -103,8 +103,8 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # First, start the agentsys server:
-  cd agentsys && uv run uvicorn src.main:app --reload --port 8000
+  # First, start the easypaper server:
+  uv run uvicorn easypaper.main:app --reload --port 8000
   
   # Then generate from JSON file:
   python scripts/generate_paper.py --input examples/transkg_metadata.json
@@ -241,10 +241,9 @@ Examples:
     # Check server health
     print("Checking server connection...")
     if not await check_server_health(api_url):
-        print(f"\nError: Cannot connect to agentsys server at {api_url}")
+        print(f"\nError: Cannot connect to easypaper server at {api_url}")
         print("\nPlease start the server first:")
-        print("  cd agentsys")
-        print("  uv run uvicorn src.main:app --reload --port 8000")
+        print("  uv run uvicorn easypaper.main:app --reload --port 8000")
         return 1
     print("Server connected.\n")
     

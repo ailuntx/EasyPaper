@@ -3,54 +3,6 @@ revision = 1
 requires-python = ">=3.11"
 
 [[package]]
-name = "agentsys"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "aiofiles" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "ipython" },
-    { name = "jinja2" },
-    { name = "langchain" },
-    { name = "langgraph" },
-    { name = "openai" },
-    { name = "pdf2image" },
-    { name = "pymupdf" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "python-dotenv" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiofiles", specifier = ">=24.1.0" },
-    { name = "fastapi", specifier = ">=0.121.1" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "ipython", specifier = ">=9.7.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "langchain", specifier = ">=1.0.5" },
-    { name = "langgraph", specifier = ">=0.0.26" },
-    { name = "openai", specifier = ">=2.7.2" },
-    { name = "pdf2image", specifier = ">=1.17.0" },
-    { name = "pymupdf", specifier = ">=1.26.7" },
-    { name = "pytest", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", specifier = ">=0.21.0" },
-    { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0,<0.31" },
-]
-
-[[package]]
-name = "aiofiles"
-version = "25.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/41/c3/534eac40372d8ee36ef40df62ec129bee4fdb5ad9706e58a29be53b2c970/aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2", size = 46354 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/8a/340a1555ae33d7354dbca4faa54948d76d89a27ceef032c8c3bc661d003e/aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695", size = 14668 },
-]
-
-[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -66,6 +18,25 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ee/67/531ea369ba64dcff5ec9c3402f9f51bf748cec26dde048a2f973a4eea7f5/annotated_types-0.7.0.tar.gz", hash = "sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89", size = 16081 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53", size = 13643 },
+]
+
+[[package]]
+name = "anthropic"
+version = "0.84.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "docstring-parser" },
+    { name = "httpx" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/ea/0869d6df9ef83dcf393aeefc12dd81677d091c6ffc86f783e51cf44062f2/anthropic-0.84.0.tar.gz", hash = "sha256:72f5f90e5aebe62dca316cb013629cfa24996b0f5a4593b8c3d712bc03c43c37", size = 539457 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/ca/218fa25002a332c0aa149ba18ffc0543175998b1f65de63f6d106689a345/anthropic-0.84.0-py3-none-any.whl", hash = "sha256:861c4c50f91ca45f942e091d83b60530ad6d4f98733bfe648065364da05d29e7", size = 455156 },
 ]
 
 [[package]]
@@ -210,6 +181,69 @@ sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277 },
 ]
+
+[[package]]
+name = "docstring-parser"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896 },
+]
+
+[[package]]
+name = "easypaper"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "jinja2" },
+    { name = "langchain" },
+    { name = "langgraph" },
+    { name = "openai" },
+    { name = "pdf2image" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pymupdf" },
+    { name = "python-dotenv" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "ipython" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+server = [
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+vlm = [
+    { name = "anthropic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anthropic", marker = "extra == 'vlm'", specifier = ">=0.18.0" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.121.1" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "ipython", marker = "extra == 'dev'", specifier = ">=9.7.0" },
+    { name = "jinja2", specifier = ">=3.1.0" },
+    { name = "langchain", specifier = ">=1.0.5" },
+    { name = "langgraph", specifier = ">=0.0.26" },
+    { name = "openai", specifier = ">=2.7.2" },
+    { name = "pdf2image", specifier = ">=1.17.0" },
+    { name = "pillow", specifier = ">=10.0" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pymupdf", specifier = ">=1.26.7" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30.0,<0.31" },
+]
+provides-extras = ["server", "dev", "vlm"]
 
 [[package]]
 name = "executing"

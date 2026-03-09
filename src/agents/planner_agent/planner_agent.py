@@ -11,7 +11,6 @@ import re
 import random
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter
 from ..base import BaseAgent
 from ..shared.llm_client import LLMClient
 from ...config.schema import ModelConfig
@@ -219,7 +218,10 @@ class PlannerAgent(BaseAgent):
         )
         self.vlm_service = vlm_service
         self._last_plan: Optional[PaperPlan] = None
-        self._router = self._create_router()
+        try:
+            self._router = self._create_router()
+        except Exception:
+            self._router = None
 
         logger.info("PlannerAgent initialized (vlm=%s)", vlm_service is not None)
 
@@ -232,7 +234,7 @@ class PlannerAgent(BaseAgent):
         return "Creates detailed paragraph-level paper plans"
 
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         return self._router
 
     @property
@@ -250,7 +252,7 @@ class PlannerAgent(BaseAgent):
             },
         ]
 
-    def _create_router(self) -> APIRouter:
+    def _create_router(self) -> "APIRouter":
         from .router import create_planner_router
         return create_planner_router(self)
 

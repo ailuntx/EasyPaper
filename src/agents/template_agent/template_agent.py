@@ -16,10 +16,8 @@ import tempfile
 import os
 import re
 from typing import List, Dict, Any
-from fastapi import APIRouter
 from ...config.schema import ModelConfig
 from ..base import BaseAgent
-from .router import create_template_router
 from .models import TemplateInfo
 
 
@@ -406,9 +404,13 @@ class TemplateParserAgent(BaseAgent):
         return "Parses LaTeX template packages to extract format rules and structure"
 
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         """Return the FastAPI router for this agent"""
-        return create_template_router(self)
+        try:
+            from .router import create_template_router
+            return create_template_router(self)
+        except Exception:
+            return None
 
     @property
     def endpoints_info(self) -> List[Dict[str, Any]]:

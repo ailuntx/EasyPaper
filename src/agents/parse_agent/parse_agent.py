@@ -7,10 +7,8 @@ import operator
 from pathlib import Path
 import json
 from typing import List, Dict, Any
-from fastapi import APIRouter
 from ...config.schema import ModelConfig
 from ..base import BaseAgent
-from .router import create_parse_router
 
 
 UNDERSTAND_PROMPT = """You are a helpful assistant that helps to understand paper.
@@ -191,9 +189,13 @@ class ParseAgent(BaseAgent):
         return "Research paper understanding and parsing agent"
 
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         """Return the FastAPI router for this agent"""
-        return create_parse_router(self)
+        try:
+            from .router import create_parse_router
+            return create_parse_router(self)
+        except Exception:
+            return None
 
     @property
     def endpoints_info(self) -> List[Dict[str, Any]]:

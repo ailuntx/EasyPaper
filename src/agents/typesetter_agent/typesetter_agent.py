@@ -19,11 +19,9 @@ import httpx
 import logging
 from pathlib import Path
 from typing import List, Dict, Any
-from fastapi import APIRouter
 from jinja2 import Template
 from ...config.schema import ModelConfig
 from ..base import BaseAgent
-from .router import create_typesetter_router
 from .models import ResourceInfo, BibEntry, CompilationResult, TemplateConfig
 
 
@@ -2133,9 +2131,13 @@ class TypesetterAgent(BaseAgent):
         return "Handles resource fetching, template injection, and LaTeX compilation with self-healing"
 
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         """Return the FastAPI router for this agent"""
-        return create_typesetter_router(self)
+        try:
+            from .router import create_typesetter_router
+            return create_typesetter_router(self)
+        except Exception:
+            return None
 
     @property
     def endpoints_info(self) -> List[Dict[str, Any]]:

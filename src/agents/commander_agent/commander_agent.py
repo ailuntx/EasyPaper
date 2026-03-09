@@ -15,10 +15,8 @@ import os
 import json
 import httpx
 from typing import List, Dict, Any
-from fastapi import APIRouter
 from ...config.schema import ModelConfig
 from ..base import BaseAgent
-from .router import create_commander_router
 # Import unified models from Writer Agent
 from ..writer_agent.section_models import (
     Material,
@@ -813,9 +811,13 @@ class CommanderAgent(BaseAgent):
         return "Orchestrates paper writing by assembling context and compiling prompts for content generation"
 
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter | None":
         """Return the FastAPI router for this agent"""
-        return create_commander_router(self)
+        try:
+            from .router import create_commander_router
+            return create_commander_router(self)
+        except Exception:
+            return None
 
     @property
     def endpoints_info(self) -> List[Dict[str, Any]]:

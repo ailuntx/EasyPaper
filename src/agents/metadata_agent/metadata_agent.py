@@ -28,12 +28,16 @@ import re
 import os
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Tuple, Set
+from typing import List, Dict, Any, Optional, Tuple, Set, TYPE_CHECKING
 from pathlib import Path
 
 import httpx
 from pydantic import BaseModel
-from fastapi import APIRouter
+
+from ...events import EventEmitter, EventType, GenerationEvent
+
+if TYPE_CHECKING:
+    from fastapi import APIRouter
 
 from ..react_base import ReActAgent
 from ...config.schema import ModelConfig, ToolsConfig
@@ -171,7 +175,10 @@ class MetaDataAgent(ReActAgent):
         super().__init__(config, tools_config)
         self.results_dir = Path(__file__).parent.parent.parent.parent / "results"
         self.results_dir.mkdir(parents=True, exist_ok=True)
-        self._router = self._create_router()
+        try:
+            self._router = self._create_router()
+        except Exception:
+            self._router = None
         # Skill registry — injected post-construction by agents/__init__.py
         self._skill_registry = None
         # Peer agent references — injected post-construction via set_peers()
@@ -207,7 +214,7 @@ class MetaDataAgent(ReActAgent):
         return "MetaData-based paper generation (Simple Mode) - generates complete papers from 5 natural language fields + BibTeX references"
     
     @property
-    def router(self) -> APIRouter:
+    def router(self) -> "APIRouter":
         """Return the FastAPI router for this agent"""
         return self._router
     
@@ -237,7 +244,7 @@ class MetaDataAgent(ReActAgent):
             },
         ]
     
-    def _create_router(self) -> APIRouter:
+    def _create_router(self) -> "APIRouter":
         """Create FastAPI router for this agent"""
         from .router import create_metadata_router
         return create_metadata_router(self)
@@ -260,6 +267,39 @@ class MetaDataAgent(ReActAgent):
         return self._skill_registry.get_writing_skills(
             section_type=section_type,
             venue=style_guide,
+        )
+
+    @staticmethod
+    async def _emit(
+        emitter: Optional[EventEmitter],
+        event_type: EventType,
+        phase: str,
+        message: str,
+        **data: Any,
+    ) -> None:
+        """
+        Fire-and-forget helper for emitting generation events.
+
+        - **Description**:
+            - Silently no-ops when *emitter* is ``None`` so callers never need
+              to guard with ``if emitter:``.
+
+        - **Args**:
+            - `emitter` (EventEmitter | None): The emitter instance, or None.
+            - `event_type` (EventType): Category of event.
+            - `phase` (str): Logical phase name.
+            - `message` (str): Human-readable description.
+            - `**data`: Arbitrary key-value payload forwarded to ``GenerationEvent.data``.
+        """
+        if emitter is None:
+            return
+        await emitter.emit(
+            GenerationEvent(
+                event_type=event_type,
+                phase=phase,
+                message=message,
+                data=data if data else None,
+            )
         )
 
     async def _build_code_repository_context(
@@ -994,6 +1034,7 @@ class MetaDataAgent(ReActAgent):
         max_review_iterations: int = 3,
         enable_planning: bool = True,
         enable_vlm_review: bool = False,
+        event_emitter: Optional[EventEmitter] = None,
     ) -> PaperGenerationResult:
         """
         Generate complete paper from MetaData
@@ -1109,6 +1150,7 @@ class MetaDataAgent(ReActAgent):
             # =================================================================
             if metadata.code_repository:
                 print("[MetaDataAgent] Phase 0e-pre: Building code repository context...")
+                await self._emit(event_emitter, EventType.PHASE_START, "code_repository", "Building code repository context")
                 try:
                     code_context = await self._build_code_repository_context(metadata)
                     if code_context:
@@ -1146,6 +1188,7 @@ class MetaDataAgent(ReActAgent):
             # =================================================================
             if enable_planning:
                 print(f"[MetaDataAgent] Phase 0: Creating Paper Plan...")
+                await self._emit(event_emitter, EventType.PHASE_START, "planning", "Creating paper plan")
                 search_cfg = {}
                 if self.tools_config and self.tools_config.paper_search:
                     ps = self.tools_config.paper_search
@@ -1331,6 +1374,12 @@ class MetaDataAgent(ReActAgent):
                                 )
                         except Exception as e:
                             print(f"[MetaDataAgent] Warning: Failed to generate research context: {e}")
+                    await self._emit(
+                        event_emitter, EventType.PHASE_COMPLETE, "planning",
+                        f"Paper plan created with {len(paper_plan.sections)} sections",
+                        sections=len(paper_plan.sections),
+                        estimated_words=paper_plan.get_total_estimated_words(),
+                    )
                 else:
                     print(f"[MetaDataAgent] Planning skipped or failed, using defaults")
 
@@ -1379,6 +1428,8 @@ class MetaDataAgent(ReActAgent):
             converted_tables: Dict[str, str] = {}
             if metadata.tables:
                 print(f"[MetaDataAgent] Phase 0.5: Converting {len(metadata.tables)} tables...")
+                await self._emit(event_emitter, EventType.PHASE_START, "table_conversion",
+                                 f"Converting {len(metadata.tables)} tables to LaTeX")
                 # Determine base path for resolving file paths
                 base_path = None
                 if save_output and paper_dir:
@@ -1396,6 +1447,7 @@ class MetaDataAgent(ReActAgent):
             # Phase 1: Introduction (Leader Section)
             # =================================================================
             print(f"[MetaDataAgent] Phase 1: Generating Introduction...")
+            await self._emit(event_emitter, EventType.PHASE_START, "introduction", "Generating introduction section")
             intro_plan = paper_plan.get_section("introduction") if paper_plan else None
             intro_result = await self._generate_introduction(
                 metadata, ref_pool, section_plan=intro_plan,
@@ -1413,6 +1465,13 @@ class MetaDataAgent(ReActAgent):
                 memory.log("metadata", "phase1", "introduction_generated",
                            narrative=f"Writer completed the introduction section ({intro_result.word_count} words).",
                            word_count=intro_result.word_count)
+                await self._emit(
+                    event_emitter, EventType.SECTION_COMPLETE, "introduction",
+                    f"Introduction completed ({intro_result.word_count} words)",
+                    section_type="introduction",
+                    latex_content=intro_result.latex_content,
+                    word_count=intro_result.word_count,
+                )
                 if intro_plan:
                     intro_valid_keys = list(
                         dict.fromkeys(
@@ -1464,6 +1523,7 @@ class MetaDataAgent(ReActAgent):
             # Phase 2: Body Sections (can be parallel)
             # =================================================================
             print(f"[MetaDataAgent] Phase 2: Generating Body Sections...")
+            await self._emit(event_emitter, EventType.PHASE_START, "body", "Generating body sections")
             # Dynamic: read body section types from the plan (no hardcoding)
             if paper_plan:
                 body_section_types = paper_plan.get_body_section_types()
@@ -1507,6 +1567,13 @@ class MetaDataAgent(ReActAgent):
                     memory.log("metadata", "phase2", f"{section_type}_generated",
                                narrative=f"Writer completed the {section_type} section ({result.word_count} words).",
                                word_count=result.word_count)
+                    await self._emit(
+                        event_emitter, EventType.SECTION_COMPLETE, section_type,
+                        f"{section_type} completed ({result.word_count} words)",
+                        section_type=section_type,
+                        latex_content=result.latex_content,
+                        word_count=result.word_count,
+                    )
                     if section_plan:
                         section_valid_keys = list(
                             dict.fromkeys(
@@ -1529,6 +1596,7 @@ class MetaDataAgent(ReActAgent):
             # Phase 3: Synthesis Sections (Abstract + Conclusion)
             # =================================================================
             print(f"[MetaDataAgent] Phase 3: Generating Synthesis Sections...")
+            await self._emit(event_emitter, EventType.PHASE_START, "synthesis", "Generating synthesis sections (abstract & conclusion)")
             
             # Generate Abstract
             abstract_result = await self._generate_synthesis_section(
@@ -1547,6 +1615,13 @@ class MetaDataAgent(ReActAgent):
                 memory.log("metadata", "phase3", "abstract_generated",
                            narrative=f"Writer completed the abstract ({abstract_result.word_count} words).",
                            word_count=abstract_result.word_count)
+                await self._emit(
+                    event_emitter, EventType.SECTION_COMPLETE, "abstract",
+                    f"Abstract completed ({abstract_result.word_count} words)",
+                    section_type="abstract",
+                    latex_content=abstract_result.latex_content,
+                    word_count=abstract_result.word_count,
+                )
             else:
                 errors.append(f"Abstract generation failed: {abstract_result.error}")
             
@@ -1571,6 +1646,13 @@ class MetaDataAgent(ReActAgent):
                     memory.log("metadata", "phase3", "conclusion_generated",
                                narrative=f"Writer completed the conclusion ({conclusion_result.word_count} words).",
                                word_count=conclusion_result.word_count)
+                    await self._emit(
+                        event_emitter, EventType.SECTION_COMPLETE, "conclusion",
+                        f"Conclusion completed ({conclusion_result.word_count} words)",
+                        section_type="conclusion",
+                        latex_content=conclusion_result.latex_content,
+                        word_count=conclusion_result.word_count,
+                    )
                 else:
                     errors.append(f"Conclusion generation failed: {conclusion_result.error}")
             
@@ -1582,6 +1664,8 @@ class MetaDataAgent(ReActAgent):
             # =================================================================
             # Unified Review Orchestration (Reviewer + VLM)
             # =================================================================
+            if enable_review:
+                await self._emit(event_emitter, EventType.PHASE_START, "review", "Starting review loop")
             (
                 generated_sections,
                 sections_results,
@@ -1608,6 +1692,12 @@ class MetaDataAgent(ReActAgent):
             )
             if orchestration_errors:
                 errors.extend(orchestration_errors)
+            if enable_review:
+                await self._emit(
+                    event_emitter, EventType.PHASE_COMPLETE, "review",
+                    f"Review completed ({review_iterations} iterations)",
+                    review_iterations=review_iterations,
+                )
 
             # Recompute citation usage from final post-review content so exports align
             # with the delivered manuscript instead of pre-review drafts.
@@ -2059,7 +2149,7 @@ class MetaDataAgent(ReActAgent):
             else:
                 status = "error"
             
-            return PaperGenerationResult(
+            result = PaperGenerationResult(
                 status=status,
                 paper_title=metadata.title,
                 sections=sections_results,
@@ -2071,15 +2161,27 @@ class MetaDataAgent(ReActAgent):
                 review_iterations=review_iterations,
                 errors=errors,
             )
+            await self._emit(
+                event_emitter, EventType.COMPLETE, "complete",
+                f"Paper generation finished ({status})",
+                result=result.model_dump(),
+            )
+            return result
             
         except Exception as e:
             print(f"[MetaDataAgent] Error: {e}")
-            return PaperGenerationResult(
+            err_result = PaperGenerationResult(
                 status="error",
                 paper_title=metadata.title,
                 sections=sections_results,
                 errors=[str(e)],
             )
+            await self._emit(
+                event_emitter, EventType.ERROR, "error",
+                f"Paper generation failed: {e}",
+                result=err_result.model_dump(),
+            )
+            return err_result
     
     async def generate_single_section(
         self,

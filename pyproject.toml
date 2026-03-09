@@ -1,12 +1,10 @@
 [project]
-name = "agentsys"
+name = "easypaper"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-powered academic paper generation SDK"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.121.1",
-    "uvicorn[standard]>=0.30.0,<0.31",
     "langchain>=1.0.5",
     "openai>=2.7.2",
     "langgraph>=0.0.26",
@@ -21,6 +19,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+server = [
+    "fastapi>=0.121.1",
+    "uvicorn[standard]>=0.30.0,<0.31",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
@@ -33,3 +35,17 @@ vlm = [
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+
+[tool.setuptools.package-dir]
+easypaper = "src"
+
+[tool.setuptools.packages.find]
+where = ["."]

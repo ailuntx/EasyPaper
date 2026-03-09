@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
-from fastapi import APIRouter
+from typing import Any, List, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi import APIRouter
 
 
 class BaseAgent(ABC):
@@ -20,8 +22,8 @@ class BaseAgent(ABC):
 
     @property
     @abstractmethod
-    def router(self) -> APIRouter:
-        """Return the FastAPI router for this agent"""
+    def router(self) -> "APIRouter | None":
+        """Return the FastAPI router for this agent (None when FastAPI is not installed)"""
         pass
 
     @property

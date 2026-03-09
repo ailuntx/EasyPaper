@@ -15,11 +15,12 @@ from typing_extensions import TypedDict, Annotated, Optional
 from langgraph.graph import StateGraph, START, END
 import operator
 import re
-from typing import List, Dict, Any, Set
-from fastapi import APIRouter
+from typing import List, Dict, Any, Set, TYPE_CHECKING
 from ...config.schema import ModelConfig, ToolsConfig
 from ..react_base import ReActAgent
-from .router import create_writer_router
+
+if TYPE_CHECKING:
+    from fastapi import APIRouter
 from .models import GeneratedContent, ReviewResult
 from ..shared.tools import (
     ToolRegistry,
@@ -812,8 +813,12 @@ class WriterAgent(ReActAgent):
         return "Generates LaTeX content with iterative review for academic quality"
 
     @property
-    def router(self) -> APIRouter:
-        return create_writer_router(self)
+    def router(self) -> "APIRouter | None":
+        try:
+            from .router import create_writer_router
+            return create_writer_router(self)
+        except Exception:
+            return None
 
     @property
     def endpoints_info(self) -> List[Dict[str, Any]]:
