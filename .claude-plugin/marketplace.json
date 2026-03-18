@@ -1,0 +1,42 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "easypaper",
+  "description": "AI-powered academic paper generation plugin for Claude Code. Generate LaTeX papers from metadata interactively.",
+  "owner": {
+    "name": "PinkGranite",
+    "email": "18216345277@163.com"
+  },
+  "metadata": {
+    "description": "AI-powered academic paper generation plugin for Claude Code. Generate LaTeX papers from metadata interactively."
+  },
+  "plugins": [
+    {
+      "name": "easypaper",
+      "source": "./plugins/easypaper",
+      "description": "AI-powered academic paper generation plugin for Claude Code. Generate LaTeX papers from metadata interactively.",
+      "author": {
+        "name": "PinkGranite",
+        "email": "18216345277@163.com"
+      },
+      "homepage": "https://github.com/pinkgranite/easypaper",
+      "repository": "https://github.com/pinkgranite/easypaper",
+      "license": "Apache",
+      "keywords": [
+        "latex",
+        "academic",
+        "paper",
+        "generation",
+        "plugin"
+      ],
+      "category": "workflow",
+      "tags": [
+        "latex",
+        "academic",
+        "paper",
+        "generation",
+        "plugin"
+      ],
+      "strict": false
+    }
+  ]
+}

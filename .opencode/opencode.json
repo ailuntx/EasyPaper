@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+  "instructions": [
+    "AGENTS.md",
+    "plugins/easypaper/skills/paper-from-metadata/SKILL.md",
+    "plugins/easypaper/skills/venue-selection/SKILL.md",
+    "plugins/easypaper/skills/academic-writing-rules/SKILL.md"
+  ],
+  "plugin": [
+    "./plugins/easypaper"
+  ],
+  "command": {
+    "easypaper": {
+      "description": "Generate a full paper from metadata through EasyPaper API",
+      "template": "{file:plugins/easypaper/commands/easypaper.md}\n\n$ARGUMENTS"
+    },
+    "paper-from-metadata": {
+      "description": "Generate a full paper from structured metadata",
+      "template": "{file:plugins/easypaper/commands/paper-from-metadata.md}\n\n$ARGUMENTS"
+    },
+    "paper-section": {
+      "description": "Generate a single manuscript section",
+      "template": "{file:plugins/easypaper/commands/paper-section.md}\n\n$ARGUMENTS"
+    }
+  }
+}

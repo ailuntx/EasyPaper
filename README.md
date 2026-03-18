@@ -219,48 +219,79 @@ Additional top-level sections:
 
 - `easypaper/` — SDK core, agent implementations, event system, shared utilities
 - `configs/` — YAML configs for agents and models
-- `skills/` — built-in writing skills, venue profiles, and reviewer checkers
+- `skills/` — backend YAML skills loaded by the Python service
+- `plugins/easypaper/` — Claude/OpenCode plugin root (commands + SKILL.md prompts)
+- `.claude-plugin/marketplace.json` — marketplace catalog
+- `.opencode/opencode.json` — OpenCode/OpenClaw runtime configuration
+- `AGENTS.md` — repository-level instructions for coding agents
 - `scripts/` — CLI utilities and demos
 - `user_case/` — standalone usage example (independent environment)
 - `economist_example/` — sample metadata input
 
 ## Claude Code Plugin Market
 
-This repository is also a **Claude Code plugin market** containing AI-powered academic paper generation tools.
+This repository ships a Claude Code marketplace with one installable plugin located at `plugins/easypaper`.
 
 ### Installation
 
-Add this market to Claude Code:
+Add the marketplace:
 
 ```bash
-/plugin market add https://github.com/your-username/easypaper
+/plugin marketplace add https://github.com/your-username/easypaper
 ```
 
-Then install individual plugins:
+Install the plugin from this marketplace:
 
 ```bash
-/plugin install easypaper
+/plugin install easypaper@easypaper
 ```
 
-### Available Plugins
+### Available Plugin
 
-| Plugin | Description |
-|--------|-------------|
-| easypaper | Generate AI-powered academic papers from metadata interactively |
+| Plugin | Source | Description |
+|--------|--------|-------------|
+| easypaper | `./plugins/easypaper` | Generate AI-powered academic papers from metadata interactively |
 
 ### Usage
 
-After installation, use the command:
+After installation:
 
-```
+```bash
 /easypaper
 ```
 
-This will guide you through an interactive workflow to generate your academic paper.
+Related commands:
 
-### Prerequisites
+```bash
+/paper-from-metadata
+/paper-section
+```
+
+### Plugin Prerequisites
 
 - Python 3.11+
 - `easypaper` package installed (`pip install easypaper`)
 - LaTeX toolchain (pdflatex + bibtex) for PDF compilation
 - API key for LLM provider (configured via config file)
+
+## OpenCode / OpenClaw Usage
+
+This repository includes native OpenCode/OpenClaw configuration in `.opencode/opencode.json`.
+
+### Run directly in this repository
+
+```bash
+opencode
+```
+
+The runtime loads:
+
+- Plugin path: `./plugins/easypaper`
+- Skills: `plugins/easypaper/skills/*/SKILL.md`
+- Commands: `easypaper`, `paper-from-metadata`, `paper-section`
+
+For both Claude Code and OpenCode/OpenClaw workflows, start the EasyPaper API service before generation:
+
+```bash
+uv run uvicorn easypaper.main:app --reload --port 8000
+```

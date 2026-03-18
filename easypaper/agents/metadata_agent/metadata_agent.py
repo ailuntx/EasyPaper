@@ -3053,9 +3053,9 @@ class MetaDataAgent(ReActAgent):
         valid_keys: set,
         remove_invalid: bool = True
     ) -> tuple:
-        """
+        r"""
         Validate citations in content and optionally remove invalid ones.
-        
+
         Args:
             content: LaTeX content with \cite{} commands
             valid_keys: Set of valid citation keys
