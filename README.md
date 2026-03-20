@@ -31,6 +31,8 @@ pip install easypaper
 
 ### One-shot generation
 
+**Inline metadata:**
+
 ```python
 import asyncio
 from easypaper import EasyPaper, PaperMetaData
@@ -54,9 +56,38 @@ async def main():
 asyncio.run(main())
 ```
 
+**Load metadata from a JSON file (recommended):**  
+Prepare a `metadata.json` (see [`examples/meta.json`](examples/meta.json) for the full schema). You can load it directly into `PaperMetaData` and run generation. A file like `examples/meta.json` is fully supported: all content fields (title, idea_hypothesis, method, data, experiments, references, figures, tables, template_path, style_guide, target_pages, code_repository, export_prompt_traces) are part of `PaperMetaData`; generation options (`output_dir`, `save_output`, `enable_vlm_review`, `max_review_iterations`) are not—pass them to `generate()` when your JSON includes them.
+
+```python
+import asyncio
+import json
+from easypaper import EasyPaper, PaperMetaData
+
+async def main():
+    ep = EasyPaper(config_path="config.yaml")
+
+    with open("metadata.json", encoding="utf-8") as f:
+        data = json.load(f)
+    metadata = PaperMetaData.model_validate(data)  # extra keys ignored
+    options = {k: data[k] for k in ("output_dir", "save_output", "enable_vlm_review", "max_review_iterations") if k in data}
+
+    result = await ep.generate(metadata, **options)
+    print(result.status, result.total_word_count)
+
+asyncio.run(main())
+```
+
+For a minimal metadata-only JSON (no `output_dir` etc.), you can use:
+
+```python
+metadata = PaperMetaData.model_validate_json_file("metadata.json")
+result = await ep.generate(metadata)
+```
+
 ### Streaming generation
 
-Use `generate_stream()` to receive real-time progress events via async generator:
+Use `generate_stream()` to receive real-time progress events via async generator. Metadata can be built inline or loaded from a JSON file (e.g. `PaperMetaData.model_validate_json_file("metadata.json")`).
 
 ```python
 import asyncio
@@ -64,13 +95,7 @@ from easypaper import EasyPaper, PaperMetaData, EventType
 
 async def main():
     ep = EasyPaper(config_path="config.yaml")
-    metadata = PaperMetaData(
-        title="My Paper Title",
-        idea_hypothesis="...",
-        method="...",
-        data="...",
-        experiments="...",
-    )
+    metadata = PaperMetaData.model_validate_json_file("metadata.json")  # or build inline
 
     async for event in ep.generate_stream(metadata):
         if event.event_type == EventType.PHASE_START:

@@ -4,6 +4,8 @@ description: Generate a full academic paper from metadata using EasyPaper Python
 
 Use this skill when the user wants to generate an academic paper from metadata. This skill handles both metadata collection and paper generation in one unified workflow.
 
+**Recommended:** Have the user prepare a `metadata.json` (see `examples/meta.json` for the full schema), then load it with `PaperMetaData.model_validate_json_file("metadata.json")` and pass any generation options (`output_dir`, `save_output`, `enable_vlm_review`, `max_review_iterations`) to `ep.generate(metadata, **options)`. A file like `examples/meta.json` is fully supported.
+
 ## Workflow
 
 ### Phase 1: Check for Existing Metadata
@@ -157,32 +159,38 @@ Before generating:
    ep = EasyPaper(config_path=str(config_path))
    ```
 
-3. **Convert metadata to PaperMetaData object**:
-   - Map collected JSON metadata to `PaperMetaData` model
-   - **Ensure all paths are absolute**: Before creating PaperMetaData, verify and convert:
-     - `template_path` → absolute
-     - `figures[].file_path` → absolute
-     - `code_repository.path` (if local_dir) → absolute
-     - `output_dir` → absolute
-   - Handle optional fields with defaults
-   - Validate all required fields are present
+3. **Obtain PaperMetaData (prefer loading from file)**:
+   - **When user has a metadata file (recommended):** Load with `PaperMetaData.model_validate_json_file(path)`. Convert any relative paths in the file to absolute before or after load (e.g. resolve `template_path`, `figures[].file_path`, `code_repository.path`, `output_dir`).
+   - **When metadata is from interactive collection or a dict:** Build `PaperMetaData` from the collected dict; ensure all path fields are absolute.
+   - **examples/meta.json is fully supported:** All content fields (title, idea_hypothesis, method, data, experiments, references, figures, tables, template_path, style_guide, target_pages, code_repository, export_prompt_traces) are part of `PaperMetaData`. Fields `output_dir`, `save_output`, `enable_vlm_review`, `max_review_iterations` are generation options; pass them to `ep.generate(metadata, **options)` (see step 4).
+   - Validate required fields are present.
 
 4. **Generate paper**:
    ```python
+   import json
    from pathlib import Path
    
-   # Ensure output_dir is absolute
-   output_dir = Path(metadata.get("output_dir", "output_default")).resolve()
-   template_path = Path(metadata.get("template_path")).resolve() if metadata.get("template_path") else None
+   # If metadata was loaded from a full JSON (e.g. examples/meta.json), pass generation options
+   with open("metadata.json", encoding="utf-8") as f:
+       data = json.load(f)
+   options = {}
+   for key in ("output_dir", "save_output", "enable_vlm_review", "max_review_iterations"):
+       if key in data:
+           options[key] = data[key]
+   # Resolve output_dir to absolute if present
+   if "output_dir" in options:
+       options["output_dir"] = str(Path(options["output_dir"]).resolve())
    
-   # One-shot generation
+   result = await ep.generate(metadata=paper_metadata, **options)
+   ```
+   Or with explicit options:
+   ```python
    result = await ep.generate(
        metadata=paper_metadata,
-       compile_pdf=True,  # from metadata
-       enable_review=True,  # from metadata
-       max_review_iterations=3,  # from metadata
-       output_dir=str(output_dir),  # absolute path
-       template_path=str(template_path) if template_path else None,  # absolute path if provided
+       output_dir=str(Path(metadata.get("output_dir", "output_default")).resolve()),
+       compile_pdf=True,
+       enable_review=True,
+       max_review_iterations=3,
    )
    ```
 
@@ -266,7 +274,7 @@ The metadata should match the structure in `examples/meta.json`, but with **abso
 - **Examples**: Always provide examples when asking for input (use absolute paths in examples)
 - **Validation**: Validate each field immediately and ask for correction if invalid
 - **Path conversion**: Always convert relative paths to absolute paths immediately upon collection
-- **Reference**: Always reference `examples/meta.json` when users ask about structure (but note paths should be absolute)
+- **Reference**: Always reference `examples/meta.json` when users ask about structure (but note paths should be absolute). That file is fully supported: content fields load into `PaperMetaData`; `output_dir`, `save_output`, `enable_vlm_review`, `max_review_iterations` are passed to `ep.generate(metadata, **options)`.
 - **Flexibility**: Allow users to provide metadata in different formats (paste full JSON, or answer questions)
 - **Direct import**: Use `from easypaper import EasyPaper, PaperMetaData` directly - no API calls needed
 - **Config handling**: Ask user for config path if not found, or use default `configs/dev.yaml` (convert to absolute)

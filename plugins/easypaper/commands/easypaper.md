@@ -26,7 +26,7 @@ Run the EasyPaper end-to-end paper generation workflow with guided setup and met
      - Advanced: `figures` (with absolute file_path), `tables`, `code_repository` (with absolute path if local_dir), `output_dir` (absolute path)
    - **Path handling**: Ensure all paths are absolute - convert relative paths to absolute using `pathlib.Path.resolve()`
    - **Review and confirm**: Display summary, allow edits, save to file, get confirmation
-   - **Generate paper**: Use EasyPaper Python SDK directly:
+   - **Generate paper**: Use EasyPaper Python SDK directly. Prefer loading from a metadata file when the user has one (e.g. `metadata = PaperMetaData.model_validate_json_file("metadata.json")`); pass generation options from the same JSON (`output_dir`, `save_output`, `enable_vlm_review`, `max_review_iterations`) to `ep.generate(metadata, **options)`.
      ```python
      from easypaper import EasyPaper, PaperMetaData
      from pathlib import Path
@@ -34,7 +34,9 @@ Run the EasyPaper end-to-end paper generation workflow with guided setup and met
      # Config path should be absolute
      config_path = Path("configs/openrouter.yaml").resolve()
      ep = EasyPaper(config_path=str(config_path))
-     result = await ep.generate(metadata, **options)
+     # If user has metadata.json (e.g. examples/meta.json): load and pass options
+     metadata = PaperMetaData.model_validate_json_file("metadata.json")
+     result = await ep.generate(metadata, **options)  # options from JSON if present
      ```
    - **Report results**: Show status, output files, absolute paths, summary
 
