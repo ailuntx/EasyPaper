@@ -4019,7 +4019,14 @@ class MetaDataAgent(ReActAgent):
             if self._typesetter is not None:
                 try:
                     print("[MetaDataAgent] Typesetter compile path: peer")
-                    peer_result = await self._typesetter.run(**payload)
+                    peer_payload = dict(payload)
+                    # In-process Typesetter expects TemplateConfig object, while
+                    # HTTP route accepts dict and converts it. Normalize here.
+                    tc = peer_payload.get("template_config")
+                    if isinstance(tc, dict):
+                        from ..typesetter_agent.models import TemplateConfig
+                        peer_payload["template_config"] = TemplateConfig(**tc)
+                    peer_result = await self._typesetter.run(**peer_payload)
                     compilation_result = peer_result.get("compilation_result") if isinstance(peer_result, dict) else None
                     if hasattr(compilation_result, "model_dump"):
                         compilation_result = compilation_result.model_dump()
